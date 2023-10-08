@@ -167,9 +167,7 @@ begin
 end;
 
 # ╔═╡ 2bd8abe2-6531-11ee-38f5-5becee44a42f
-md"## Pontryagin Maximum Principle
-
-### Maximising control
+md"## Maximising control
 
 We introduce the pseudo-Hamiltonian
 
@@ -196,7 +194,7 @@ since $\partial_{uu}H = -1 < 0$.
 u(x, p) = p;
 
 # ╔═╡ 422e9ce0-1012-47e0-ad03-c4cd3ebbd0ed
-md"""### Boundary value problem
+md"""## Boundary value problem
 
 Plugging the maximising control into the pseudo-Hamiltonian vector field
 
