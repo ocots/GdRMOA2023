@@ -28,6 +28,12 @@ jobs:
               with:
                   version: "1" # This will automatically pick the latest Julia version
 
+            - name: Install ct-registry
+              uses: julia-actions/add-julia-registry@v1
+              with:
+                  key: ${{ secrets.SSH_KEY }}
+                  registry: control-toolbox/ct-registry
+
             - name: Cache Julia artifacts & such
               uses: julia-actions/cache@v1
               with:
