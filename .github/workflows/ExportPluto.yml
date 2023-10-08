@@ -31,7 +31,6 @@ jobs:
             - name: Install ct-registry
               uses: julia-actions/add-julia-registry@v1
               with:
-                  key: ${{ secrets.SSH_KEY }}
                   registry: control-toolbox/ct-registry
 
             - name: Cache Julia artifacts & such
