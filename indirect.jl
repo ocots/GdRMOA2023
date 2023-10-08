@@ -36,7 +36,23 @@ begin
 	    show(io, mime, tc.right)
 	    write(io, """</div></div>""")
 	end
+	md"Settings for the presentation."
 end
+
+# ╔═╡ c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
+html"""<style>
+	main {
+	    padding-top: 40px;
+	    width: 100%;
+	    max-width: 1100px !important;
+	    margin-right: auto;
+	    margin-left: auto;
+	    padding-left: 5%;
+	    padding-right: 5%;
+	    text-align: justify;
+		font-family: "Lato Medium" !important;
+	}
+"""
 
 # ╔═╡ 13e743c6-0313-44a3-8a88-c64657ee7a34
 present_button()
@@ -47,14 +63,17 @@ md"# Getting started"
 # ╔═╡ 7e8b0e71-cefe-444c-be6e-446f1e47722b
 TwoColumns(
 	@htl("""
+	<br>
 	<img src="https://raw.githubusercontent.com/control-toolbox/GdRMOA2023/main/gdr-moa-qr-code.png" alt="ct qr code" width="100%">
 	"""),
 	md"""
 !!! info "Link to this notebook"
-	<https://github.com/control-toolbox/GdRMOA2023/>
+	
+	<https://control-toolbox.org/GdRMOA2023/indirect.html>
 
 To launch it:
-```julia$
+	
+```julia
 using Pkg
 Pkg.add("Pluto")
 using Pluto
@@ -2373,9 +2392,10 @@ version = "1.4.1+1"
 # ╠═74d3eafa-09d7-4187-b4dd-21312f964581
 # ╠═45a81a29-82eb-4280-a965-ae1afe89091f
 # ╠═562ae176-9781-4820-942f-9a3cccf9c732
+# ╠═c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
 # ╟─13e743c6-0313-44a3-8a88-c64657ee7a34
 # ╟─7c204fdb-7c76-4c9b-804f-e2082c2bc05b
-# ╠═7e8b0e71-cefe-444c-be6e-446f1e47722b
+# ╟─7e8b0e71-cefe-444c-be6e-446f1e47722b
 # ╟─301e03aa-00e9-47e0-b9ab-f00787bff820
 # ╠═3183dd76-6daf-4af3-bd64-fb58495723c2
 # ╠═2bd8abe2-6531-11ee-38f5-5becee44a42f
