@@ -7,6 +7,7 @@ using InteractiveUtils
 # ╔═╡ 74d3eafa-09d7-4187-b4dd-21312f964581
 begin
 	using PlutoUI
+	using PlutoTeachingTools
 	using HypertextLiteral
 	using OptimalControl
 end
@@ -16,54 +17,52 @@ TableOfContents(depth=1)
 
 # ╔═╡ 562ae176-9781-4820-942f-9a3cccf9c732
 begin
-	struct TwoColumnSplit{L, R}
+	struct TwoColumns{L, R}
 	    left::L
 	    right::R
+		lwidth::Integer
+		rwidth::Integer
+		function TwoColumns(l::L, r::R; lwidth=45) where {L, R}
+			new{L, R}(l, r, lwidth, 100-5-lwidth)
+		end
 	end
 	
-	function Base.show(io, mime::MIME"text/html", tc::TwoColumnSplit)
-	    write(io, """<div style="display: flex;"><div style="flex: 45%;">""")
+	function Base.show(io, mime::MIME"text/html", tc::TwoColumns)
+	    write(io, """<div style="display: flex;">
+		<div style="flex: $(tc.lwidth)%;">""")
 	    show(io, mime, tc.left)
-		write(io, """</div><div style="flex: 10%;">""")
-	    write(io, """</div><div style="flex: 45%;">""")
+		write(io, """</div><div style="flex: 5%;">""")
+	    write(io, """</div><div style="flex: $(tc.rwidth)%;">""")
 	    show(io, mime, tc.right)
 	    write(io, """</div></div>""")
 	end
 end
 
-# ╔═╡ 08b4a6ce-c2db-4eaf-ba3d-a4c019a48a28
-SlideNextPrev() = @htl("""
-<script id="first">
-
-	var editor = document.querySelector("pluto-editor")
-	var prev = document.querySelector("button.changeslide.prev")
-	var next = document.querySelector("button.changeslide.next")
-	
-	const click_background = (e => {
-		// debugger;
-		if (editor != e.target) return;
-		e.preventDefault();		
-		console.log(e.button);
-		if (e.button === 2 && prev) {
-			prev.click();
-		} else if (e.button === 0 && next) {
-			next.click();
-		} 
-	})
-	editor.addEventListener("click", click_background)
-	editor.addEventListener("contextmenu", click_background)
-
-	invalidation.then(() => { 
-		editor.removeEventListener("click", click_background);
-		editor.removeEventListener("contextmenu", click_background);
-	})
-	
-	return true;
-</script>
-""")
-
 # ╔═╡ 13e743c6-0313-44a3-8a88-c64657ee7a34
 present_button()
+
+# ╔═╡ 7c204fdb-7c76-4c9b-804f-e2082c2bc05b
+md"# Getting started"
+
+# ╔═╡ 7e8b0e71-cefe-444c-be6e-446f1e47722b
+TwoColumns(
+	@htl("""
+	<img src="https://raw.githubusercontent.com/control-toolbox/GdRMOA2023/main/gdr-moa-qr-code.png" alt="ct qr code" width="100%">
+	"""),
+	md"""
+!!! info "Link to this notebook"
+	<https://github.com/control-toolbox/GdRMOA2023/>
+
+To launch it:
+```julia$
+using Pkg
+Pkg.add("Pluto")
+using Pluto
+Pluto.run()
+```
+""",
+	lwidth=30
+)
 
 # ╔═╡ 301e03aa-00e9-47e0-b9ab-f00787bff820
 md"# Indirect shooting
@@ -104,11 +103,13 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
 OptimalControl = "5f98b655-cc9a-415a-b60e-744165666948"
+PlutoTeachingTools = "661c6b06-c737-4d37-b85c-46df65de6f69"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
 HypertextLiteral = "~0.9.4"
 OptimalControl = "~0.7.6"
+PlutoTeachingTools = "~0.2.13"
 PlutoUI = "~0.7.52"
 """
 
@@ -118,7 +119,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "9a615558dfb839d3e7465c47b1f4679efad1390d"
+project_hash = "fad587c8876c72c99b0cbb6b57a2df5a9f289be2"
 
 [[deps.ADNLPModels]]
 deps = ["ColPack", "ForwardDiff", "LinearAlgebra", "NLPModels", "Requires", "ReverseDiff", "SparseArrays"]
@@ -301,6 +302,12 @@ deps = ["Static", "StaticArrayInterface"]
 git-tree-sha1 = "70232f82ffaab9dc52585e0dd043b5e0c6b714f1"
 uuid = "fb6a15b2-703c-40df-9091-08a04967cfa9"
 version = "0.1.12"
+
+[[deps.CodeTracking]]
+deps = ["InteractiveUtils", "UUIDs"]
+git-tree-sha1 = "a1296f0fe01a4c3f9bf0dc2934efbf4416f5db31"
+uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
+version = "1.3.4"
 
 [[deps.CodecBzip2]]
 deps = ["Bzip2_jll", "Libdl", "TranscodingStreams"]
@@ -909,6 +916,12 @@ git-tree-sha1 = "6f2675ef130a300a112286de91973805fcc5ffbc"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
 version = "2.1.91+0"
 
+[[deps.JuliaInterpreter]]
+deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
+git-tree-sha1 = "81dc6aefcbe7421bd62cb6ca0e700779330acff8"
+uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
+version = "0.9.25"
+
 [[deps.KLU]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse_jll"]
 git-tree-sha1 = "884c2968c2e8e7e6bf5956af88cb46aa745c854b"
@@ -1146,6 +1159,12 @@ weakdeps = ["ChainRulesCore", "ForwardDiff", "SpecialFunctions"]
     [deps.LoopVectorization.extensions]
     ForwardDiffExt = ["ChainRulesCore", "ForwardDiff"]
     SpecialFunctionsExt = "SpecialFunctions"
+
+[[deps.LoweredCodeUtils]]
+deps = ["JuliaInterpreter"]
+git-tree-sha1 = "60168780555f3e663c536500aa790b6368adc02a"
+uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
+version = "2.3.0"
 
 [[deps.METIS_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1434,6 +1453,24 @@ version = "1.39.0"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
+[[deps.PlutoHooks]]
+deps = ["InteractiveUtils", "Markdown", "UUIDs"]
+git-tree-sha1 = "072cdf20c9b0507fdd977d7d246d90030609674b"
+uuid = "0ff47ea0-7a50-410d-8455-4348d5de0774"
+version = "0.0.5"
+
+[[deps.PlutoLinks]]
+deps = ["FileWatching", "InteractiveUtils", "Markdown", "PlutoHooks", "Revise", "UUIDs"]
+git-tree-sha1 = "8f5fa7056e6dcfb23ac5211de38e6c03f6367794"
+uuid = "0ff47ea0-7a50-410d-8455-4348d5de0420"
+version = "0.1.6"
+
+[[deps.PlutoTeachingTools]]
+deps = ["Downloads", "HypertextLiteral", "LaTeXStrings", "Latexify", "Markdown", "PlutoLinks", "PlutoUI", "Random"]
+git-tree-sha1 = "542de5acb35585afcf202a6d3361b430bc1c3fbd"
+uuid = "661c6b06-c737-4d37-b85c-46df65de6f69"
+version = "0.2.13"
+
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
 git-tree-sha1 = "e47cd150dbe0443c3a3651bc5b9cbd5576ab75b7"
@@ -1594,6 +1631,12 @@ deps = ["ChainRulesCore", "DiffResults", "DiffRules", "ForwardDiff", "FunctionWr
 git-tree-sha1 = "d1235bdd57a93bd7504225b792b867e9a7df38d5"
 uuid = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 version = "1.15.1"
+
+[[deps.Revise]]
+deps = ["CodeTracking", "Distributed", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Pkg", "REPL", "Requires", "UUIDs", "Unicode"]
+git-tree-sha1 = "609c26951d80551620241c3d7090c71a73da75ab"
+uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
+version = "3.5.6"
 
 [[deps.Rmath]]
 deps = ["Random", "Rmath_jll"]
@@ -2330,8 +2373,9 @@ version = "1.4.1+1"
 # ╠═74d3eafa-09d7-4187-b4dd-21312f964581
 # ╠═45a81a29-82eb-4280-a965-ae1afe89091f
 # ╠═562ae176-9781-4820-942f-9a3cccf9c732
-# ╟─08b4a6ce-c2db-4eaf-ba3d-a4c019a48a28
-# ╠═13e743c6-0313-44a3-8a88-c64657ee7a34
+# ╟─13e743c6-0313-44a3-8a88-c64657ee7a34
+# ╟─7c204fdb-7c76-4c9b-804f-e2082c2bc05b
+# ╠═7e8b0e71-cefe-444c-be6e-446f1e47722b
 # ╟─301e03aa-00e9-47e0-b9ab-f00787bff820
 # ╠═3183dd76-6daf-4af3-bd64-fb58495723c2
 # ╠═2bd8abe2-6531-11ee-38f5-5becee44a42f
