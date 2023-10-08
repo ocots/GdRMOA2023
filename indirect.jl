@@ -4,6 +4,16 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
 # ╔═╡ 74d3eafa-09d7-4187-b4dd-21312f964581
 begin
 	using PlutoUI
@@ -84,26 +94,29 @@ begin
 end
 
 # ╔═╡ 7e8b0e71-cefe-444c-be6e-446f1e47722b
-TwoColumns(
-	@htl("""
-	<img src="https://raw.githubusercontent.com/control-toolbox/GdRMOA2023/main/gdr-moa-qr-code.png" alt="ct qr code" width="100%">
-	"""),
-	md"""
-!!! info "Link to this notebook"
+begin
+	qr_code_url = "https://raw.githubusercontent.com/control-toolbox/GdRMOA2023/main/gdr-moa-qr-code.png"
+	TwoColumns(
+		md"""
+		$(Resource(qr_code_url, :style => "width:90%"))
+		""",
+		md"""
+	!!! info "Link to this notebook"
+		
+		<https://control-toolbox.org/GdRMOA2023/indirect.html>
 	
-	<https://control-toolbox.org/GdRMOA2023/indirect.html>
-
-To launch it:
-	
-```julia
-using Pkg
-Pkg.add("Pluto")
-using Pluto
-Pluto.run()
-```
-""",
-	lwidth=30
-)
+	To launch it:
+		
+	```julia
+	using Pkg
+	Pkg.add("Pluto")
+	using Pluto
+	Pluto.run()
+	```
+	""",
+		lwidth=30
+	)
+end
 
 # ╔═╡ 13e743c6-0313-44a3-8a88-c64657ee7a34
 html"<button onclick='present()'>Presentation mode: Enter / Leave</button>"
@@ -319,6 +332,7 @@ md"""## Plots
 """
 
 # ╔═╡ c33b7143-3736-4067-aca1-19052169765f
+# ╠═╡ show_logs = false
 begin
 	# exponential mapping
 	exp(p0; saveat=[]) = φ((t0, tf), x0, p0, saveat=saveat).ode_sol
@@ -364,7 +378,7 @@ begin
 		x = [sol(t)[1] for t ∈ sol.t]
 		p = [sol(t)[2] for t ∈ sol.t]
 		
-		plot!(plt_flow, x, p, color=:red, linewidth=2, label="extremal solution")
+		plot!(plt_flow, x, p, color=:red, linestyle=:dash, linewidth=0.5, label="extremal solution")
 		plot!(plt_flow, [x[end]], [p[end]], seriestype=:scatter, color=:green, label=false)
 
 		# plot the shooting function with the solution
@@ -376,13 +390,46 @@ begin
 
 		return plt_flow, plt_shoot
 	end
+	
+	function plot_extremal!(plt, p0, lw) # add an extremal to a plot
+		sol = exp(p0)
+		x = [sol(t)[1] for t ∈ sol.t]
+		p = [sol(t)[2] for t ∈ sol.t]
+		plot!(plt, x, p, color=:red, label=false, linewidth=lw, z_order=:back)
+		return plt
+	end
+	
+	function plot_extremals!(plt, p0s, idx) # add some extremals to a plot
+		lw_min = 0.5
+		lw_max = 2
+		N = length(p0s)
+		lws = range(lw_min, lw_max, N)
+		@assert 0 ≤ idx ≤ N
+		for i = 1:idx
+			plot_extremal!(plt, p0s[i], lws[i+N-idx])
+		end
+		return plt
+	end
+
+plt_flow, plt_shoot = initial_plots(p0); # initial plots
 end;
+
+# ╔═╡ 8ddb54a9-a197-4f66-a5a0-f4ab01c45564
+md"""
+Current iterate: $(@bind idx NumberField(0:length(iterates), default=0))
+"""
 
 # ╔═╡ 162f142e-d9ab-4e95-af4d-653e5ec8c975
 # ╠═╡ show_logs = false
 begin 
-	plt_flow, plt_shoot = initial_plots(p0)
-	plot(plt_flow, plt_shoot, layout=(1,2), size=(900, 450), leftmargin=5mm, bottommargin=5mm)
+	# copy the plt_flow
+	plt_flow_copy = deepcopy(plt_flow)
+
+	# add extremals
+	plot_extremals!(plt_flow_copy, iterates, idx)
+
+	# plot all
+	plot(plt_flow_copy, plt_shoot, layout=(1,2), size=(900, 450), leftmargin=5mm, bottommargin=5mm)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2685,7 +2732,8 @@ version = "1.4.1+1"
 # ╠═703868e1-d368-482a-a617-65a1fdef13b2
 # ╠═3a992e9c-1c16-40d9-a76a-2364494a2dda
 # ╟─b853f0c8-a8b9-4d26-bc41-bf119f50ccd6
+# ╟─8ddb54a9-a197-4f66-a5a0-f4ab01c45564
 # ╟─c33b7143-3736-4067-aca1-19052169765f
-# ╠═162f142e-d9ab-4e95-af4d-653e5ec8c975
+# ╟─162f142e-d9ab-4e95-af4d-653e5ec8c975
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
