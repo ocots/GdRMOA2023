@@ -88,6 +88,9 @@ begin
 		    text-align: justify;
 			font-family: "Lato Medium" !important;
 		}
+		.plutoui-toc.aside {
+		    width: min(80vw, 400px) !important;
+		}
 	</style>
 	Hidden css style.
 	"""
@@ -218,7 +221,7 @@ leads to the definition of the Boundary Value Problem (BVP)
 
 where $[t] =  (x(t),p(t),u(x(t), p(t)))$.
 
-!!! note "Our goal"
+!!! note "Nota bene"
 
     Our goal is to solve this (BVP).
 """
@@ -309,7 +312,7 @@ Jₛ(p0) = ForwardDiff.jacobian(x -> [S(x[1])], [p0])[1, 1];
 # ╔═╡ f9077dd0-7ae7-49bd-a538-103a571928fc
 # ╠═╡ show_logs = false
 begin
-	p0 = 0.5 					# initial costate for the Newton solver
+	p0 = 1.5 					# initial costate for the Newton solver
 	iterates = [p0] 			# list of iterates
 	iterations = 5 				# number of iterations
 	for i ∈ 1:iterations
@@ -331,29 +334,36 @@ md"""## Plots
 
 """
 
+# ╔═╡ 8ddb54a9-a197-4f66-a5a0-f4ab01c45564
+md"""
+Current iterate: $(@bind idx NumberField(-1:length(iterates)-1, default=0))
+"""
+
 # ╔═╡ c33b7143-3736-4067-aca1-19052169765f
 # ╠═╡ show_logs = false
 begin
 	# exponential mapping
 	exp(p0; saveat=[]) = φ((t0, tf), x0, p0, saveat=saveat).ode_sol
 
+	# limits
+	p0min = -0.5
+	p0max = 2
+	
 	# initial plots
 	function initial_plots(p0_sol)
 		
 		times = range(t0, tf, length=2) # times for wavefronts
-		p0min = -0.5 					# ymin
-		p0max = 2 						# ymax
 
 		# plot of the flow
 		plt_flow = plot()
 		
-		p0s = range(p0min, p0max, length=20)	# range for the extremals
+		p0s = 0.1.+range(p0min, p0max, length=20)	# range for the extremals
 		for i ∈ 1:length(p0s)
 		    sol = exp(p0s[i])
 		    x = [sol(t)[1] for t ∈ sol.t]
 		    p = [sol(t)[2] for t ∈ sol.t]
 		    label = i==1 ? "extremals" : false
-		    plot!(plt_flow, x, p, color=:blue, label=label)
+		    plot!(plt_flow, x, p, color=:blue, label=label, z_order=:back)
 		end
 
 		# plot of wavefronts
@@ -368,25 +378,27 @@ begin
 		
 		for j ∈ 1:length(times) # plot the wavefronts
 		    label = j==1 ? "flow at times" : false
-		    plot!(plt_flow, xs[:, j], ps[:, j], color=:green, linewidth=2, label=label)
+		    plot!(plt_flow, xs[:, j], ps[:, j], color=:green, linewidth=2, label=label, z_order=:front)
 		end
 		plot!(plt_flow, xlims = (-1.1, 1), ylims =  (p0min, p0max))
-		plot!(plt_flow, [0, 0], [p0min, p0max], color=:black, xlabel="x", ylabel="p", label="x=xf")
+		plot!(plt_flow, [0, 0], [p0min, p0max], color=:black, xlabel="x", ylabel="p", label="x=xf", z_order=:back)
 
 		# plot the solution
 		sol = exp(p0_sol)
 		x = [sol(t)[1] for t ∈ sol.t]
 		p = [sol(t)[2] for t ∈ sol.t]
 		
-		plot!(plt_flow, x, p, color=:red, linestyle=:dash, linewidth=0.5, label="extremal solution")
-		plot!(plt_flow, [x[end]], [p[end]], seriestype=:scatter, color=:green, label=false)
+		plot!(plt_flow, x, p, color=:red, linestyle=:dash, linewidth=0.5, label="extremal solution", z_order=:back)
+		plot!(plt_flow, [x[end]], [p[end]], seriestype=:scatter, 
+			markersize=5, markerstrokewidth=0.5, color=:green, label=false, z_order=:front)
 
 		# plot the shooting function with the solution
 		plt_shoot = plot(xlims=(p0min, p0max), ylims=(-2, 4), xlabel="p₀", ylabel="y")
-		plot!(plt_shoot, p0s, S, linewidth=2, label="S(p₀)", color=:green)
-		plot!(plt_shoot, [p0min, p0max], [0, 0], color=:black, label="y=0")
-		plot!(plt_shoot, [p0_sol, p0_sol], [-2, 0], color=:black, label="p₀ solution", linestyle=:dash)
-		plot!(plt_shoot, [p0_sol], [0], seriestype=:scatter, color=:green, label=false)
+		plot!(plt_shoot, p0s, S, linewidth=2, label="S(p₀)", color=:green, z_order=:front)
+		plot!(plt_shoot, [p0min, p0max], [0, 0], color=:black, label="y=0", z_order=:back)
+		plot!(plt_shoot, [p0_sol, p0_sol], [-2, 0], color=:black, label="p₀ solution", linestyle=:dash, z_order=:back)
+		plot!(plt_shoot, [p0_sol], [0], seriestype=:scatter, 
+			markersize=5, markerstrokewidth=0.5, color=:green, label=false, z_order=:front)
 
 		return plt_flow, plt_shoot
 	end
@@ -395,11 +407,12 @@ begin
 		sol = exp(p0)
 		x = [sol(t)[1] for t ∈ sol.t]
 		p = [sol(t)[2] for t ∈ sol.t]
-		plot!(plt, x, p, color=:red, label=false, linewidth=lw, z_order=:back)
+		plot!(plt, x, p, color=:red, label=false, linewidth=lw)
 		return plt
 	end
 	
 	function plot_extremals!(plt, p0s, idx) # add some extremals to a plot
+		idx = idx + 1
 		lw_min = 0.5
 		lw_max = 2
 		N = length(p0s)
@@ -411,25 +424,66 @@ begin
 		return plt
 	end
 
+	T(p0, d) = S(p0) + Jₛ(p0) * d # tangent equation
+	
+	function plot_iterates!(plt, p0s, idx)
+
+		# styles
+		x_style = (color=:red, seriestype=:scatter, markerstrokewidth=0.5, label="", z_order=:front)
+		y_style = (color=:blue, seriestype=:scatter, 
+			markersize=3, markerstrokewidth=0, label="", z_order=:front)
+		a_style = (color=:black, linestyle=:dash, label="")
+    	T_style = (color=:blue, z_order=:back, label="")
+		
+		#
+		idx = idx + 1
+		ms_min = 1
+		ms_max = 5
+		N = length(p0s)
+		mss = range(ms_min, ms_max, N)
+		@assert 0 ≤ idx ≤ N
+		for i = 1:idx
+			plot!(plt, [p0s[i], p0s[i]], [0, S(p0s[i])]; a_style...)
+			plot!(plt, [p0s[i]], [0]; markersize=mss[i+N-idx], x_style...)
+		end
+	
+		a = p0min
+		b = p0max
+		if 2 ≤ idx ≤ N-1 # plot the tangent
+			x = p0s[idx-1]
+			plot!(plt, [x], [S(x)]; y_style...)
+			plot!(plt, [a, b], [T(x, a-x), T(x, b-x)]; T_style...) # tangente
+		end
+		if 1 ≤ idx ≤ N
+			x = p0s[idx]
+			plot!(plt, [x], [S(x)]; y_style...)
+		end
+		
+		return plt
+	end
+
 plt_flow, plt_shoot = initial_plots(p0); # initial plots
 end;
-
-# ╔═╡ 8ddb54a9-a197-4f66-a5a0-f4ab01c45564
-md"""
-Current iterate: $(@bind idx NumberField(0:length(iterates), default=0))
-"""
 
 # ╔═╡ 162f142e-d9ab-4e95-af4d-653e5ec8c975
 # ╠═╡ show_logs = false
 begin 
 	# copy the plt_flow
 	plt_flow_copy = deepcopy(plt_flow)
+	plt_shoot_copy = deepcopy(plt_shoot)
 
 	# add extremals
-	plot_extremals!(plt_flow_copy, iterates, idx)
+	if idx ≥ 0
+		plot_extremals!(plt_flow_copy, iterates, idx)
+	end
+
+	# add iterates on the plot of shooting function
+	if idx ≥ 0
+		plot_iterates!(plt_shoot_copy, iterates, idx)
+	end
 
 	# plot all
-	plot(plt_flow_copy, plt_shoot, layout=(1,2), size=(900, 450), leftmargin=5mm, bottommargin=5mm)
+	plot(plt_flow_copy, plt_shoot_copy, layout=(1,2), size=(900, 450), leftmargin=5mm, bottommargin=5mm)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
