@@ -11,6 +11,7 @@ begin
 	using HypertextLiteral
 	using OptimalControl
 	using ForwardDiff
+	using Plots.PlotMeasures # for leftmargin, bottommargin
 	md"Needed packages for the presentation."
 end
 
@@ -312,12 +313,85 @@ iterates
 # ╠═╡ show_logs = false
 S.(iterates)
 
+# ╔═╡ b853f0c8-a8b9-4d26-bc41-bf119f50ccd6
+md"""## Plots
+
+"""
+
+# ╔═╡ c33b7143-3736-4067-aca1-19052169765f
+begin
+	# exponential mapping
+	exp(p0; saveat=[]) = φ((t0, tf), x0, p0, saveat=saveat).ode_sol
+
+	# initial plots
+	function initial_plots(p0_sol)
+		
+		times = range(t0, tf, length=2) # times for wavefronts
+		p0min = -0.5 					# ymin
+		p0max = 2 						# ymax
+
+		# plot of the flow
+		plt_flow = plot()
+		
+		p0s = range(p0min, p0max, length=20)	# range for the extremals
+		for i ∈ 1:length(p0s)
+		    sol = exp(p0s[i])
+		    x = [sol(t)[1] for t ∈ sol.t]
+		    p = [sol(t)[2] for t ∈ sol.t]
+		    label = i==1 ? "extremals" : false
+		    plot!(plt_flow, x, p, color=:blue, label=label)
+		end
+
+		# plot of wavefronts
+		p0s = range(p0min, p0max, length=200)	# range to get points on the wavefronts
+		xs  = zeros(length(p0s), length(times))
+		ps  = zeros(length(p0s), length(times))
+		for i ∈ 1:length(p0s)	# get points on the wavefronts
+		    sol = exp(p0s[i], saveat=times)
+		    xs[i, :] = [z[1] for z ∈ sol.(times)]
+		    ps[i, :] = [z[2] for z ∈ sol.(times)]
+		end
+		
+		for j ∈ 1:length(times) # plot the wavefronts
+		    label = j==1 ? "flow at times" : false
+		    plot!(plt_flow, xs[:, j], ps[:, j], color=:green, linewidth=2, label=label)
+		end
+		plot!(plt_flow, xlims = (-1.1, 1), ylims =  (p0min, p0max))
+		plot!(plt_flow, [0, 0], [p0min, p0max], color=:black, xlabel="x", ylabel="p", label="x=xf")
+
+		# plot the solution
+		sol = exp(p0_sol)
+		x = [sol(t)[1] for t ∈ sol.t]
+		p = [sol(t)[2] for t ∈ sol.t]
+		
+		plot!(plt_flow, x, p, color=:red, linewidth=2, label="extremal solution")
+		plot!(plt_flow, [x[end]], [p[end]], seriestype=:scatter, color=:green, label=false)
+
+		# plot the shooting function with the solution
+		plt_shoot = plot(xlims=(p0min, p0max), ylims=(-2, 4), xlabel="p₀", ylabel="y")
+		plot!(plt_shoot, p0s, S, linewidth=2, label="S(p₀)", color=:green)
+		plot!(plt_shoot, [p0min, p0max], [0, 0], color=:black, label="y=0")
+		plot!(plt_shoot, [p0_sol, p0_sol], [-2, 0], color=:black, label="p₀ solution", linestyle=:dash)
+		plot!(plt_shoot, [p0_sol], [0], seriestype=:scatter, color=:green, label=false)
+
+		return plt_flow, plt_shoot
+	end
+end;
+
+# ╔═╡ 162f142e-d9ab-4e95-af4d-653e5ec8c975
+# ╠═╡ show_logs = false
+begin 
+	plt_flow, plt_shoot = initial_plots(p0)
+	plot(plt_flow, plt_shoot, layout=(1,2), size=(900, 450), leftmargin=5mm, bottommargin=5mm)
+end
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
 OptimalControl = "5f98b655-cc9a-415a-b60e-744165666948"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoTeachingTools = "661c6b06-c737-4d37-b85c-46df65de6f69"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
@@ -325,6 +399,7 @@ PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 ForwardDiff = "~0.10.36"
 HypertextLiteral = "~0.9.4"
 OptimalControl = "~0.7.6"
+Plots = "~1.39.0"
 PlutoTeachingTools = "~0.2.13"
 PlutoUI = "~0.7.52"
 """
@@ -335,7 +410,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "a90826ad2628b21f3e6dd2c16d9705dc0eaa86c0"
+project_hash = "88bb9cc98ecb4379c4c5317ba0ec7a4b62cd7c5d"
 
 [[deps.ADNLPModels]]
 deps = ["ColPack", "ForwardDiff", "LinearAlgebra", "NLPModels", "Requires", "ReverseDiff", "SparseArrays"]
@@ -2609,5 +2684,8 @@ version = "1.4.1+1"
 # ╠═f9077dd0-7ae7-49bd-a538-103a571928fc
 # ╠═703868e1-d368-482a-a617-65a1fdef13b2
 # ╠═3a992e9c-1c16-40d9-a76a-2364494a2dda
+# ╟─b853f0c8-a8b9-4d26-bc41-bf119f50ccd6
+# ╟─c33b7143-3736-4067-aca1-19052169765f
+# ╠═162f142e-d9ab-4e95-af4d-653e5ec8c975
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
