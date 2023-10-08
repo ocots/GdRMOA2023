@@ -10,10 +10,21 @@ begin
 	using PlutoTeachingTools
 	using HypertextLiteral
 	using OptimalControl
+	using ForwardDiff
+	md"Needed packages for the presentation."
 end
 
+# ╔═╡ 89d454b5-5077-42a9-9ea9-e44b9a4f0be1
+md"# An introduction to indirect shooting
+
+Olivier Cots (Univ. Toulouse)
+
+Journées annuelles 2023 du GdR MOA, 18 octobre 2023
+
+**Abstract.** In this tutorial we introduce the indirect shooting method on basic examples."
+
 # ╔═╡ 45a81a29-82eb-4280-a965-ae1afe89091f
-TableOfContents(depth=1)
+TableOfContents(depth=2)
 
 # ╔═╡ 562ae176-9781-4820-942f-9a3cccf9c732
 begin
@@ -36,34 +47,44 @@ begin
 	    show(io, mime, tc.right)
 	    write(io, """</div></div>""")
 	end
-	md"Settings for the presentation."
+
+	struct Foldable{C}
+	    title::String
+	    content::C
+	end
+	
+	function Base.show(io, mime::MIME"text/html", fld::Foldable)
+	    write(io,"<details><summary>$(fld.title)</summary><p>")
+	    show(io, mime, fld.content)
+	    write(io,"</p></details>")
+	end
+	
+	#Foldable("What is the gravitational acceleration?", md"Correct, it's ``\pi^2``.") 
+	md"Hidden declaration of useful tools."
 end
 
 # ╔═╡ c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
-html"""<style>
-	main {
-	    padding-top: 40px;
-	    width: 100%;
-	    max-width: 1100px !important;
-	    margin-right: auto;
-	    margin-left: auto;
-	    padding-left: 5%;
-	    padding-right: 5%;
-	    text-align: justify;
-		font-family: "Lato Medium" !important;
-	}
-"""
-
-# ╔═╡ 13e743c6-0313-44a3-8a88-c64657ee7a34
-present_button()
-
-# ╔═╡ 7c204fdb-7c76-4c9b-804f-e2082c2bc05b
-md"# Getting started"
+begin
+	html"""<style>
+		main {
+		    padding-top: 40px;
+		    width: 100%;
+		    max-width: 1100px !important;
+		    margin-right: auto;
+		    margin-left: auto;
+		    padding-left: 5%;
+		    padding-right: 5%;
+		    text-align: justify;
+			font-family: "Lato Medium" !important;
+		}
+	</style>
+	Hidden css style.
+	"""
+end
 
 # ╔═╡ 7e8b0e71-cefe-444c-be6e-446f1e47722b
 TwoColumns(
 	@htl("""
-	<br>
 	<img src="https://raw.githubusercontent.com/control-toolbox/GdRMOA2023/main/gdr-moa-qr-code.png" alt="ct qr code" width="100%">
 	"""),
 	md"""
@@ -83,12 +104,11 @@ Pluto.run()
 	lwidth=30
 )
 
+# ╔═╡ 13e743c6-0313-44a3-8a88-c64657ee7a34
+html"<button onclick='present()'>Presentation mode: Enter / Leave</button>"
+
 # ╔═╡ 301e03aa-00e9-47e0-b9ab-f00787bff820
-md"# Indirect shooting
-
-Olivier Cots (Univ. Toulouse)
-
-**Abstract.** In this tutorial we present the indirect simple shooting method on a simple example.
+md"## Basic example
 
 Let us consider problem which consists in minimising the $L^2$-norm of the control
 
@@ -111,21 +131,198 @@ and the limit conditions
 where $t_0 = 0$, $t_f = 1$, $x_0 = -1$, $x_f = 0$ and $\alpha=1.5$.
 "
 
-# ╔═╡ 3183dd76-6daf-4af3-bd64-fb58495723c2
-
+# ╔═╡ 76175aca-885b-4f7a-8883-4b0002297576
+begin
+	t0 = 0
+	tf = 1
+	x0 = -1
+	xf = 0
+	α  = 1.5
+	@def ocp begin
+	    t ∈ [ t0, tf ], time
+	    x ∈ R, state
+	    u ∈ R, control
+	    x(t0) == x0
+	    x(tf) == xf
+	    ẋ(t) == -x(t) + α * x(t)^2 + u(t)
+	    ∫( 0.5u(t)^2 ) → min
+	end
+end;
 
 # ╔═╡ 2bd8abe2-6531-11ee-38f5-5becee44a42f
+md"## Pontryagin Maximum Principle
 
+### Maximising control
+
+We introduce the pseudo-Hamiltonian
+
+```math
+H(x, p, u) = p(-x + \alpha\, x^2 + u) + p^0\, u^2/2, \quad p^0 = -1~\text{(normal case)}.
+```
+
+The maximisation condition from the PMP
+
+```math
+\nabla_u H(x(t), p(t), u(t)) = p(t) - u(t) = 0
+```
+
+leads to the definition of the **maximising control** in feedback form
+
+```math
+u(x, p) = p
+```
+
+since $\partial_{uu}H = -1 < 0$.
+"
+
+# ╔═╡ 016e2375-6fc1-4496-a094-0be801dfca17
+u(x, p) = p;
+
+# ╔═╡ 422e9ce0-1012-47e0-ad03-c4cd3ebbd0ed
+md"""### Boundary value problem
+
+Plugging the maximising control into the pseudo-Hamiltonian vector field
+
+```math
+	\dot{x}(t) =  \nabla_p H(x(t), p(t), u(t)), \quad 
+	\dot{p}(t) = -\nabla_x H(x(t), p(t), u(t))
+```
+
+and considering the limit conditions $x(0)=x_0$, $x(t_f)=x_f$,
+leads to the definition of the Boundary Value Problem (BVP)
+
+```math
+    \left\{ 
+        \begin{array}{l}
+            \dot{x}(t)  = \phantom{-} \nabla_p H[t] = -x(t) + \alpha x^2(t) + u(x(t), p(t)) 
+            = -x(t) + \alpha x^2(t) + p(t), \\[0.5em]
+            \dot{p}(t)  = -           \nabla_x H[t] = (1 - 2 \alpha x(t))\, p(t),    \\[0.5em]
+            x(t_0)        = x_0, \quad x(t_f) = x_f,
+        \end{array}
+    \right.
+```
+
+where $[t] =  (x(t),p(t),u(x(t), p(t)))$.
+
+!!! note "Our goal"
+
+    Our goal is to solve this (BVP).
+"""
+
+# ╔═╡ 6784a1c0-1f8b-4e6c-8bf4-1260ddfee22f
+md"""## Hamiltonian vector field
+
+To achive our goal, that is to solve the (BVP), let us first introduce the pseudo-Hamiltonian vector field notation
+
+```math
+    \vec{H}(z,u) = \left( \nabla_p H(z,u), -\nabla_x H(z,u) \right), \quad z = (x,p),
+```
+
+and then denote by $\varphi_{t_0, x_0, p_0}(\cdot)$ the solution of the Cauchy problem
+
+```math
+\dot{z}(t) = \vec{H}(z(t), u(z(t))), \quad z(t_0) = (x_0, p_0).
+```
+
+Our goal becomes to solve
+
+```math
+\pi( \varphi_{t_0, x_0, p_0}(t_f) ) = x_f, \quad \pi(x, p) = x.
+```
+
+!!! note "Nota bene"
+
+    Actually, $\varphi_{t_0, x_0, p_0}(\cdot)$ is also solution of
+    
+    ```math
+        \dot{z}(t) = \vec{\mathbf{H}}(z(t)), \quad z(t_0) = (x_0, p_0),
+    ```
+    where $\mathbf{H}(z) = H(z, u(z))$ and $\vec{\mathbf{H}} = (\nabla_p \mathbf{H}, -\nabla_x \mathbf{H})$. This is what is actually computed by `Flow` below.
+
+To compute $\varphi$ with the `OptimalControl` package, we define the flow of the associated Hamiltonian vector field by:
+
+"""
+
+# ╔═╡ 17b04d51-f8db-44e9-863b-de6a75cc3327
+φ = Flow(ocp, u); # flow from the optimal control problem ocp and maximising control u
+
+# ╔═╡ 49b0fa4c-11fe-4b4e-ba13-caa7a172aa20
+# ╠═╡ show_logs = false
+φ(t0, x0, 0.5, tf) # p0 = 0.5
+
+# ╔═╡ 7466eab0-85c7-43c9-bbfb-419d888571e3
+md"""## Shooting method
+
+Now, we are in position to define mathematically the equation we have to solve in order to solve the (BVP).
+
+We introduce the **shooting function**.
+
+```math
+    \begin{array}{rlll}
+        S \colon    & \mathbb{R}    & \longrightarrow   & \mathbb{R} \\
+                    & p_0    & \longmapsto     & S(p_0) = \pi( \varphi_{t_0, x_0, p_0}(t_f) ) - x_f.
+    \end{array}
+```
+
+At the end, solving (BVP) is equivalent to solve $S(p_0) = 0$.
+This is what we call the **indirect simple shooting method**.
+"""
+
+# ╔═╡ 9b530a46-1f8d-43f5-9e30-167d35c245f9
+π(x, p) = x;
+
+# ╔═╡ ee4d6d59-2965-4233-b991-3778e06fd233
+S(p0) = π( φ(t0, x0, p0, tf)... ) - xf;
+
+# ╔═╡ 633515a6-0d41-4c80-be2f-0be8f8d5ec3e
+md"""**Newton solver.** Let us recall the basics of the Newton method. The Newton iteration is
+
+```math
+p_0^{(k+1)} = p_0^{(k)} + d^{(k)},
+```
+
+with $d^{(k)}$ the solution of the linear system
+
+```math
+J_S(p_0^{(k)}) \cdot d = - S(p_0^{(k)}).
+```
+
+"""
+
+# ╔═╡ 2f07ceb7-1133-48f8-b807-b14fbdf50754
+Jₛ(p0) = ForwardDiff.jacobian(x -> [S(x[1])], [p0])[1, 1];
+
+# ╔═╡ f9077dd0-7ae7-49bd-a538-103a571928fc
+# ╠═╡ show_logs = false
+begin
+	p0 = 0.5 					# initial costate for the Newton solver
+	iterates = [p0] 			# list of iterates
+	iterations = 5 				# number of iterations
+	for i ∈ 1:iterations
+		d  = - Jₛ(p0) \ S(p0) 	# Newton direction
+		p0 = p0 + d 			# update
+		push!(iterates, p0)		# save
+	end
+end
+
+# ╔═╡ 703868e1-d368-482a-a617-65a1fdef13b2
+iterates
+
+# ╔═╡ 3a992e9c-1c16-40d9-a76a-2364494a2dda
+# ╠═╡ show_logs = false
+S.(iterates)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
 OptimalControl = "5f98b655-cc9a-415a-b60e-744165666948"
 PlutoTeachingTools = "661c6b06-c737-4d37-b85c-46df65de6f69"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
+ForwardDiff = "~0.10.36"
 HypertextLiteral = "~0.9.4"
 OptimalControl = "~0.7.6"
 PlutoTeachingTools = "~0.2.13"
@@ -138,7 +335,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "fad587c8876c72c99b0cbb6b57a2df5a9f289be2"
+project_hash = "a90826ad2628b21f3e6dd2c16d9705dc0eaa86c0"
 
 [[deps.ADNLPModels]]
 deps = ["ColPack", "ForwardDiff", "LinearAlgebra", "NLPModels", "Requires", "ReverseDiff", "SparseArrays"]
@@ -2389,15 +2586,28 @@ version = "1.4.1+1"
 """
 
 # ╔═╡ Cell order:
+# ╟─89d454b5-5077-42a9-9ea9-e44b9a4f0be1
 # ╠═74d3eafa-09d7-4187-b4dd-21312f964581
 # ╠═45a81a29-82eb-4280-a965-ae1afe89091f
-# ╠═562ae176-9781-4820-942f-9a3cccf9c732
-# ╠═c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
-# ╟─13e743c6-0313-44a3-8a88-c64657ee7a34
-# ╟─7c204fdb-7c76-4c9b-804f-e2082c2bc05b
+# ╟─562ae176-9781-4820-942f-9a3cccf9c732
+# ╟─c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
 # ╟─7e8b0e71-cefe-444c-be6e-446f1e47722b
+# ╟─13e743c6-0313-44a3-8a88-c64657ee7a34
 # ╟─301e03aa-00e9-47e0-b9ab-f00787bff820
-# ╠═3183dd76-6daf-4af3-bd64-fb58495723c2
-# ╠═2bd8abe2-6531-11ee-38f5-5becee44a42f
+# ╠═76175aca-885b-4f7a-8883-4b0002297576
+# ╟─2bd8abe2-6531-11ee-38f5-5becee44a42f
+# ╠═016e2375-6fc1-4496-a094-0be801dfca17
+# ╟─422e9ce0-1012-47e0-ad03-c4cd3ebbd0ed
+# ╟─6784a1c0-1f8b-4e6c-8bf4-1260ddfee22f
+# ╠═17b04d51-f8db-44e9-863b-de6a75cc3327
+# ╠═49b0fa4c-11fe-4b4e-ba13-caa7a172aa20
+# ╟─7466eab0-85c7-43c9-bbfb-419d888571e3
+# ╠═9b530a46-1f8d-43f5-9e30-167d35c245f9
+# ╠═ee4d6d59-2965-4233-b991-3778e06fd233
+# ╟─633515a6-0d41-4c80-be2f-0be8f8d5ec3e
+# ╠═2f07ceb7-1133-48f8-b807-b14fbdf50754
+# ╠═f9077dd0-7ae7-49bd-a538-103a571928fc
+# ╠═703868e1-d368-482a-a617-65a1fdef13b2
+# ╠═3a992e9c-1c16-40d9-a76a-2364494a2dda
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
