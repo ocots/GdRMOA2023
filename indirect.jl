@@ -34,6 +34,9 @@ Journées annuelles 2023 du GdR MOA, 18 octobre 2023
 
 **Abstract.** In this tutorial we introduce the indirect shooting method on basic examples."
 
+# ╔═╡ 13e743c6-0313-44a3-8a88-c64657ee7a34
+html"<button onclick='present()'>Presentation mode: Enter / Leave</button>"
+
 # ╔═╡ 45a81a29-82eb-4280-a965-ae1afe89091f
 TableOfContents(depth=2)
 
@@ -74,36 +77,14 @@ begin
 	md"Hidden declaration of useful tools."
 end
 
-# ╔═╡ c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
-begin
-	html"""<style>
-		main {
-		    padding-top: 40px;
-		    width: 100%;
-		    max-width: 1100px !important;
-		    margin-right: auto;
-		    margin-left: auto;
-		    padding-left: 5%;
-		    padding-right: 5%;
-		    text-align: justify;
-			font-family: "Lato Medium" !important;
-		}
-		.plutoui-toc.aside {
-		    width: min(80vw, 400px) !important;
-		}
-	</style>
-	Hidden css style.
-	"""
-end
-
 # ╔═╡ 7e8b0e71-cefe-444c-be6e-446f1e47722b
 begin
-	qr_code_url = "https://raw.githubusercontent.com/control-toolbox/GdRMOA2023/main/gdr-moa-qr-code.png"
+	qr_code_url = "https://raw.githubusercontent.com/control-toolbox/GdRMOA2023/main/ct-qr-code.svg"
 	TwoColumns(
-		md"""
-		$(Resource(qr_code_url, :style => "width:90%"))
-		""",
-		md"""
+	md"""
+	$(Resource(qr_code_url, :style => "width:100%"))
+	""",
+	md"""
 	!!! info "Link to this notebook"
 		
 		<https://control-toolbox.org/GdRMOA2023/indirect.html>
@@ -121,8 +102,27 @@ begin
 	)
 end
 
-# ╔═╡ 13e743c6-0313-44a3-8a88-c64657ee7a34
-html"<button onclick='present()'>Presentation mode: Enter / Leave</button>"
+# ╔═╡ c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
+begin
+	html"""<style>
+		main {
+			margin: 0 auto !important;
+		    position: relative;
+		    width: auto;
+		    padding-top: 0px;
+		    max-width: 950px !important;
+		    padding-left: 0%;
+		    padding-right: 10%;
+		    text-align: justify;
+			font-family: "Lato Medium" !important;
+		}
+		.plutoui-toc.aside {
+		    width: min(80vw, 400px) !important;
+		}
+	</style>
+	Hidden css style.
+	"""
+end
 
 # ╔═╡ 301e03aa-00e9-47e0-b9ab-f00787bff820
 md"## Basic example
@@ -2761,12 +2761,12 @@ version = "1.4.1+1"
 
 # ╔═╡ Cell order:
 # ╟─89d454b5-5077-42a9-9ea9-e44b9a4f0be1
+# ╟─7e8b0e71-cefe-444c-be6e-446f1e47722b
+# ╟─13e743c6-0313-44a3-8a88-c64657ee7a34
 # ╠═74d3eafa-09d7-4187-b4dd-21312f964581
 # ╠═45a81a29-82eb-4280-a965-ae1afe89091f
 # ╟─562ae176-9781-4820-942f-9a3cccf9c732
 # ╟─c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
-# ╟─7e8b0e71-cefe-444c-be6e-446f1e47722b
-# ╟─13e743c6-0313-44a3-8a88-c64657ee7a34
 # ╟─301e03aa-00e9-47e0-b9ab-f00787bff820
 # ╠═76175aca-885b-4f7a-8883-4b0002297576
 # ╟─2bd8abe2-6531-11ee-38f5-5becee44a42f
