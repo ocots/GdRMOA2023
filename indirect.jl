@@ -15,7 +15,9 @@ macro bind(def, element)
 end
 
 # ╔═╡ 74d3eafa-09d7-4187-b4dd-21312f964581
+# ╠═╡ show_logs = false
 begin
+	using Formatting
 	using PlutoUI
 	using PlutoTeachingTools
 	using HypertextLiteral
@@ -110,7 +112,7 @@ begin
 		    position: relative;
 		    width: auto;
 		    padding-top: 0px;
-		    max-width: 950px !important;
+		    max-width: 1100px !important;
 		    padding-left: 0%;
 		    padding-right: 10%;
 		    text-align: justify;
@@ -284,10 +286,13 @@ This is what we call the **indirect simple shooting method**.
 """
 
 # ╔═╡ 9b530a46-1f8d-43f5-9e30-167d35c245f9
-π(x, p) = x;
+begin
+	π(x, p) = x
+	π(z::Tuple{Number, Number}) = π(z...) # z = (x, p)
+end;
 
 # ╔═╡ ee4d6d59-2965-4233-b991-3778e06fd233
-S(p0) = π( φ(t0, x0, p0, tf)... ) - xf;
+S(p0) = π( φ(t0, x0, p0, tf) ) - xf;
 
 # ╔═╡ 633515a6-0d41-4c80-be2f-0be8f8d5ec3e
 md"""**Newton solver.** Let us recall the basics of the Newton method. The Newton iteration is
@@ -333,9 +338,15 @@ md"""## Plots
 """
 
 # ╔═╡ 8ddb54a9-a197-4f66-a5a0-f4ab01c45564
-md"""
-Current iterate: $(@bind idx NumberField(-1:length(iterates)-1, default=0))
-"""
+begin 
+	zoom_min = 0
+	zoom_max = 4
+	md"""
+	Current iterate: $(@bind idx NumberField(-1:length(iterates)-1, default=0))
+	
+	Zoom in / out: $( @bind zoom Slider( zoom_min:0.1:zoom_max, default=zoom_min ) )
+	"""
+end
 
 # ╔═╡ c33b7143-3736-4067-aca1-19052169765f
 # ╠═╡ show_logs = false
@@ -379,24 +390,32 @@ begin
 		    plot!(plt_flow, xs[:, j], ps[:, j], color=:green, linewidth=2, label=label, z_order=:front)
 		end
 		plot!(plt_flow, xlims = (-1.1, 1), ylims =  (p0min, p0max))
-		plot!(plt_flow, [0, 0], [p0min, p0max], color=:black, xlabel="x", ylabel="p", label="x=xf", z_order=:back)
+		plot!(plt_flow, [0, 0], [p0min, p0max], color=:black, 
+			xlabel="x", ylabel="p", label="x=xf", z_order=:back)
+		plot!(plt_flow, formatter = x -> format(x, precision=2))
 
 		# plot the solution
 		sol = exp(p0_sol)
 		x = [sol(t)[1] for t ∈ sol.t]
 		p = [sol(t)[2] for t ∈ sol.t]
 		
-		plot!(plt_flow, x, p, color=:red, linestyle=:dash, linewidth=0.5, label="extremal solution", z_order=:back)
+		plot!(plt_flow, x, p, color=:red, linestyle=:dash, linewidth=0.5, 
+			label="extremal solution", z_order=:back)
 		plot!(plt_flow, [x[end]], [p[end]], seriestype=:scatter, 
 			markersize=5, markerstrokewidth=0.5, color=:green, label=false, z_order=:front)
 
 		# plot the shooting function with the solution
 		plt_shoot = plot(xlims=(p0min, p0max), ylims=(-2, 4), xlabel="p₀", ylabel="y")
+		
+		p0s = range(p0min, p0max, length=500)
 		plot!(plt_shoot, p0s, S, linewidth=2, label="S(p₀)", color=:green, z_order=:front)
+		
 		plot!(plt_shoot, [p0min, p0max], [0, 0], color=:black, label="y=0", z_order=:back)
-		plot!(plt_shoot, [p0_sol, p0_sol], [-2, 0], color=:black, label="p₀ solution", linestyle=:dash, z_order=:back)
+		plot!(plt_shoot, [p0_sol, p0_sol], [-2, 0], color=:black, 
+			label="p₀ solution", linestyle=:dash, z_order=:back)
 		plot!(plt_shoot, [p0_sol], [0], seriestype=:scatter, 
 			markersize=5, markerstrokewidth=0.5, color=:green, label=false, z_order=:front)
+		plot!(plt_shoot, formatter = x -> format(x, precision=4))
 
 		return plt_flow, plt_shoot
 	end
@@ -460,6 +479,48 @@ begin
 		return plt
 	end
 
+	function make_zoom(plt_flow, plt_shoot, zoom)
+		# ref limits
+		x1_ref = p0min; x2_ref = p0max; y1_ref = -2 ; y2_ref = 4
+		
+		# ref solution 
+		xc = p0; yc = 0
+		
+		# new limits
+		x1_new = xc - (xc - x1_ref) / 10^(zoom)
+		x2_new = xc - (xc - x2_ref) / 10^(zoom)
+		y1_new = yc - (yc - y1_ref) / 10^(zoom)
+		y2_new = yc - (yc - y2_ref) / 10^(zoom)
+		
+		# limits to center the solution
+		Δx = x2_new - x1_new
+		Δy = y2_new - y1_new
+		a = zoom_min
+		b = zoom_max
+		
+		# combination of original centering and final one when zoom is max
+		x1_new = (b-zoom)/(b-a) * x1_new + (zoom-a)/(b-a) * (xc - Δx/2)
+		x2_new = (b-zoom)/(b-a) * x2_new + (zoom-a)/(b-a) * (xc + Δx/2)
+		y1_new = (b-zoom)/(b-a) * y1_new + (zoom-a)/(b-a) * (yc - Δy/2)
+		y2_new = (b-zoom)/(b-a) * y2_new + (zoom-a)/(b-a) * (yc + Δy/2)
+		
+		# update
+		plot!(plt_shoot, xlims=(x1_new, x2_new), ylims=(y1_new, y2_new))
+
+		# for the extremals
+		x1_deb = -1.1; x2_deb = 1.0; y1_deb = p0min; y2_deb = p0max
+		x1_fin = -1.1; x2_fin = 0.1; y1_fin = 0.000; y2_fin = 0.700
+		x1_new = (b-zoom)/(b-a) * x1_deb + (zoom-a)/(b-a) * x1_fin
+		x2_new = (b-zoom)/(b-a) * x2_deb + (zoom-a)/(b-a) * x2_fin
+		y1_new = (b-zoom)/(b-a) * y1_deb + (zoom-a)/(b-a) * y1_fin
+		y2_new = (b-zoom)/(b-a) * y2_deb + (zoom-a)/(b-a) * y2_fin
+		
+		# update
+		plot!(plt_flow, xlims=(x1_new, x2_new), ylims=(y1_new, y2_new))
+		
+		return plt_flow, plt_shoot
+	end
+
 plt_flow, plt_shoot = initial_plots(p0); # initial plots
 end;
 
@@ -480,13 +541,18 @@ begin
 		plot_iterates!(plt_shoot_copy, iterates, idx)
 	end
 
+	# limits and zoom
+	make_zoom(plt_flow_copy, plt_shoot_copy, zoom)
+
 	# plot all
-	plot(plt_flow_copy, plt_shoot_copy, layout=(1,2), size=(900, 450), leftmargin=5mm, bottommargin=5mm)
+	plot(plt_flow_copy, plt_shoot_copy, layout=(1,2), size=(900, 450), 
+		leftmargin=5mm, bottommargin=5mm)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+Formatting = "59287772-0a20-5a39-b81b-1366585eb4c0"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
 OptimalControl = "5f98b655-cc9a-415a-b60e-744165666948"
@@ -495,6 +561,7 @@ PlutoTeachingTools = "661c6b06-c737-4d37-b85c-46df65de6f69"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
+Formatting = "~0.4.2"
 ForwardDiff = "~0.10.36"
 HypertextLiteral = "~0.9.4"
 OptimalControl = "~0.7.6"
@@ -509,7 +576,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "88bb9cc98ecb4379c4c5317ba0ec7a4b62cd7c5d"
+project_hash = "caf0bf420e884b93870a6e309817bc7cb10cfcf1"
 
 [[deps.ADNLPModels]]
 deps = ["ColPack", "ForwardDiff", "LinearAlgebra", "NLPModels", "Requires", "ReverseDiff", "SparseArrays"]
