@@ -1,6 +1,13 @@
 ### A Pluto.jl notebook ###
 # v0.19.29
 
+#> [frontmatter]
+#> title = "Control-toolbox playground"
+#> description = "Interface to solve optimal control problems"
+#> 
+#>     [[frontmatter.author]]
+#>     name = "Olivier Cots"
+
 using Markdown
 using InteractiveUtils
 
@@ -14,533 +21,96 @@ macro bind(def, element)
     end
 end
 
-# ╔═╡ 74d3eafa-09d7-4187-b4dd-21312f964581
-# ╠═╡ show_logs = false
+# ╔═╡ 05a95004-677d-11ee-042e-01ad951b3010
 begin
-	using Formatting
-	using PlutoUI
-	using PlutoTeachingTools
 	using HypertextLiteral
 	using OptimalControl
-	using ForwardDiff
-	using Plots.PlotMeasures # for leftmargin, bottommargin
-	md"Needed packages for the presentation."
+	using PlutoUI
+	using Plots
+	using Plots.PlotMeasures
+	md"Packages"
 end
 
-# ╔═╡ 89d454b5-5077-42a9-9ea9-e44b9a4f0be1
-md"# An introduction to indirect shooting
+# ╔═╡ 1e741a71-92c7-4048-a1d0-4deb75897b56
+md"# Control-toolbox playground"
 
-Olivier Cots (Univ. Toulouse)
+# ╔═╡ 0768852b-ca08-40a7-a6ef-4e8c68058a4a
+md"""Write the definition of the optimal control problem below."""
 
-Journées annuelles 2023 du GdR MOA, 18 octobre 2023
-
-**Abstract.** In this tutorial we introduce the indirect shooting method on basic examples."
-
-# ╔═╡ 13e743c6-0313-44a3-8a88-c64657ee7a34
-html"<button onclick='present()'>Presentation mode: Enter / Leave</button>"
-
-# ╔═╡ 301e03aa-00e9-47e0-b9ab-f00787bff820
-md"## Basic example
-
-Let us consider problem which consists in minimising the $L^2$-norm of the control
-
-```math
-        \min \frac{1}{2} \int_{t_0}^{t_f} u^2(t) \, \mathrm{d} t
-```
-
-for the scalar control system
-
-```math
-        \dot{x}(t) = -x(t) + \alpha x^2(t) + u(t), \quad  u(t) \in \mathbb{R}
-```
-
-and the limit conditions
-
-```math
-        x(t_0) = x_0, \quad x(t_f) = x_f,
-```
-
-where $t_0 = 0$, $t_f = 1$, $x_0 = -1$, $x_f = 0$ and $\alpha=1.5$.
-"
-
-# ╔═╡ 76175aca-885b-4f7a-8883-4b0002297576
-begin
-	t0 = 0
-	tf = 1
-	x0 = -1
-	xf = 0
-	α  = 1.5
-	@def ocp begin
-	    t ∈ [ t0, tf ], time
-	    x ∈ R, state
-	    u ∈ R, control
-	    x(t0) == x0
-	    x(tf) == xf
-	    ẋ(t) == -x(t) + α * x(t)^2 + u(t)
-	    ∫( 0.5u(t)^2 ) → min
-	end
+# ╔═╡ 8a272676-6205-4e64-9e53-4dfc2c50e447
+function myplot(sol) # function to compute the plot of a solution
+	#plot(sol, size=(700, 600))
+	plot(sol, size=(900, 300), layout=:group, leftmargin=5mm, bottommargin=5mm)
 end;
 
-# ╔═╡ 2bd8abe2-6531-11ee-38f5-5becee44a42f
-md"## Maximising control
-
-We introduce the pseudo-Hamiltonian
-
-```math
-H(x, p, u) = p(-x + \alpha\, x^2 + u) + p^0\, u^2/2, \quad p^0 = -1~\text{(normal case)}.
-```
-
-The maximisation condition from the PMP
-
-```math
-\nabla_u H(x(t), p(t), u(t)) = p(t) - u(t) = 0
-```
-
-leads to the definition of the **maximising control** in feedback form
-
-```math
-u(x, p) = p
-```
-
-since $\partial_{uu}H = -1 < 0$.
-"
-
-# ╔═╡ 016e2375-6fc1-4496-a094-0be801dfca17
-u(x, p) = p;
-
-# ╔═╡ 422e9ce0-1012-47e0-ad03-c4cd3ebbd0ed
-md"""## Boundary value problem
-
-Plugging the maximising control into the pseudo-Hamiltonian vector field
-
-```math
-	\dot{x}(t) =  \nabla_p H(x(t), p(t), u(t)), \quad 
-	\dot{p}(t) = -\nabla_x H(x(t), p(t), u(t))
-```
-
-and considering the limit conditions $x(0)=x_0$, $x(t_f)=x_f$,
-leads to the definition of the Boundary Value Problem (BVP)
-
-```math
-    \left\{ 
-        \begin{array}{l}
-            \dot{x}(t)  = \phantom{-} \nabla_p H[t] = -x(t) + \alpha x^2(t) + u(x(t), p(t)) 
-            = -x(t) + \alpha x^2(t) + p(t), \\[0.5em]
-            \dot{p}(t)  = -           \nabla_x H[t] = (1 - 2 \alpha x(t))\, p(t),    \\[0.5em]
-            x(t_0)        = x_0, \quad x(t_f) = x_f,
-        \end{array}
-    \right.
-```
-
-where $[t] =  (x(t),p(t),u(x(t), p(t)))$.
-
-!!! note "Nota bene"
-
-    Our goal is to solve this (BVP).
-"""
-
-# ╔═╡ 6784a1c0-1f8b-4e6c-8bf4-1260ddfee22f
-md"""## Hamiltonian vector field
-
-To achive our goal, that is to solve the (BVP), let us first introduce the pseudo-Hamiltonian vector field notation
-
-```math
-    \vec{H}(z,u) = \left( \nabla_p H(z,u), -\nabla_x H(z,u) \right), \quad z = (x,p),
-```
-
-and then denote by $\varphi_{t_0, x_0, p_0}(\cdot)$ the solution of the Cauchy problem
-
-```math
-\dot{z}(t) = \vec{H}(z(t), u(z(t))), \quad z(t_0) = (x_0, p_0).
-```
-
-Our goal becomes to solve
-
-```math
-\pi( \varphi_{t_0, x_0, p_0}(t_f) ) = x_f, \quad \pi(x, p) = x.
-```
-
-!!! note "Nota bene"
-
-    Actually, $\varphi_{t_0, x_0, p_0}(\cdot)$ is also solution of
-    
-    ```math
-        \dot{z}(t) = \vec{\mathbf{H}}(z(t)), \quad z(t_0) = (x_0, p_0),
-    ```
-    where $\mathbf{H}(z) = H(z, u(z))$ and $\vec{\mathbf{H}} = (\nabla_p \mathbf{H}, -\nabla_x \mathbf{H})$. This is what is actually computed by `Flow` below.
-
-To compute $\varphi$ with the `OptimalControl` package, we define the flow of the associated Hamiltonian vector field by:
-
-"""
-
-# ╔═╡ 17b04d51-f8db-44e9-863b-de6a75cc3327
-φ = Flow(ocp, u); # flow from the optimal control problem ocp and maximising control u
-
-# ╔═╡ 49b0fa4c-11fe-4b4e-ba13-caa7a172aa20
-# ╠═╡ show_logs = false
-φ(t0, x0, 0.5, tf) # p0 = 0.5
-
-# ╔═╡ 7466eab0-85c7-43c9-bbfb-419d888571e3
-md"""## Shooting method
-
-Now, we are in position to define mathematically the equation we have to solve in order to solve the (BVP).
-
-We introduce the **shooting function**.
-
-```math
-    \begin{array}{rlll}
-        S \colon    & \mathbb{R}    & \longrightarrow   & \mathbb{R} \\
-                    & p_0    & \longmapsto     & S(p_0) = \pi( \varphi_{t_0, x_0, p_0}(t_f) ) - x_f.
-    \end{array}
-```
-
-At the end, solving (BVP) is equivalent to solve $S(p_0) = 0$.
-This is what we call the **indirect simple shooting method**.
-"""
-
-# ╔═╡ 9b530a46-1f8d-43f5-9e30-167d35c245f9
-begin
-	π(x, p) = x
-	π(z::Tuple{Number, Number}) = π(z...) # z = (x, p)
-end;
-
-# ╔═╡ ee4d6d59-2965-4233-b991-3778e06fd233
-S(p0) = π( φ(t0, x0, p0, tf) ) - xf;
-
-# ╔═╡ 633515a6-0d41-4c80-be2f-0be8f8d5ec3e
-md"""**Newton solver.** Let us recall the basics of the Newton method. The Newton iteration is
-
-```math
-p_0^{(k+1)} = p_0^{(k)} + d^{(k)},
-```
-
-with $d^{(k)}$ the solution of the linear system
-
-```math
-J_S(p_0^{(k)}) \cdot d = - S(p_0^{(k)}).
-```
-
-"""
-
-# ╔═╡ 2f07ceb7-1133-48f8-b807-b14fbdf50754
-Jₛ(p0) = ForwardDiff.jacobian(x -> [S(x[1])], [p0])[1, 1];
-
-# ╔═╡ f9077dd0-7ae7-49bd-a538-103a571928fc
-# ╠═╡ show_logs = false
-begin
-	p0 = 1.5 					# initial costate for the Newton solver
-	iterates = [p0] 			# list of iterates
-	iterations = 5 				# number of iterations
-	for i ∈ 1:iterations
-		d  = - Jₛ(p0) \ S(p0) 	# Newton direction
-		p0 = p0 + d 			# update
-		push!(iterates, p0)		# save
-	end
-end
-
-# ╔═╡ 703868e1-d368-482a-a617-65a1fdef13b2
-iterates
-
-# ╔═╡ 3a992e9c-1c16-40d9-a76a-2364494a2dda
-# ╠═╡ show_logs = false
-S.(iterates)
-
-# ╔═╡ b853f0c8-a8b9-4d26-bc41-bf119f50ccd6
-md"""## Plots
-
-"""
-
-# ╔═╡ 8ddb54a9-a197-4f66-a5a0-f4ab01c45564
-begin 
-	zoom_min = 0
-	zoom_max = 4
-	md"""
-	Current iterate: $(@bind idx NumberField(-1:length(iterates)-1, default=0))
-	
-	Zoom in / out: $( @bind zoom Slider( zoom_min:0.1:zoom_max, default=zoom_min ) )
-	"""
-end
-
-# ╔═╡ d945e217-59e0-4a55-9381-fab63947f0fb
+# ╔═╡ 1e587c97-66ae-46db-b466-ea2f4c56fb2b
 md"# Appendix"
 
-# ╔═╡ c33b7143-3736-4067-aca1-19052169765f
-# ╠═╡ show_logs = false
+# ╔═╡ 2025030d-1b45-45d5-a06f-15cda678bb6e
+TF = TextField((100, 10), "
+t ∈ [ 0, 1 ], time
+x ∈ R², state
+u ∈ R, control
+x(0) == [ -1, 0 ]
+x(1) == [ 0, 0 ]
+ẋ(t) == [ x₂(t), u(t) ]
+∫( 0.5u(t)^2 ) → min");
+
+# ╔═╡ e914d323-b344-472b-8ab7-0a5680d4c580
+# text area to define the optimal control problem
 begin
-	# exponential mapping
-	exp(p0; saveat=[]) = φ((t0, tf), x0, p0, saveat=saveat).ode_sol
-
-	# limits
-	p0min = -0.5
-	p0max = 2
-	
-	# initial plots
-	function initial_plots(p0_sol)
-		
-		times = range(t0, tf, length=2) # times for wavefronts
-
-		# plot of the flow
-		plt_flow = plot()
-		
-		p0s = 0.1.+range(p0min, p0max, length=20)	# range for the extremals
-		for i ∈ 1:length(p0s)
-		    sol = exp(p0s[i])
-		    x = [sol(t)[1] for t ∈ sol.t]
-		    p = [sol(t)[2] for t ∈ sol.t]
-		    label = i==1 ? "extremals" : false
-		    plot!(plt_flow, x, p, color=:blue, label=label, z_order=:back)
-		end
-
-		# plot of wavefronts
-		p0s = range(p0min, p0max, length=200)	# range to get points on the wavefronts
-		xs  = zeros(length(p0s), length(times))
-		ps  = zeros(length(p0s), length(times))
-		for i ∈ 1:length(p0s)	# get points on the wavefronts
-		    sol = exp(p0s[i], saveat=times)
-		    xs[i, :] = [z[1] for z ∈ sol.(times)]
-		    ps[i, :] = [z[2] for z ∈ sol.(times)]
-		end
-		
-		for j ∈ 1:length(times) # plot the wavefronts
-		    label = j==1 ? "flow at times" : false
-		    plot!(plt_flow, xs[:, j], ps[:, j], color=:green, linewidth=2, label=label, z_order=:front)
-		end
-		plot!(plt_flow, xlims = (-1.1, 1), ylims =  (p0min, p0max))
-		plot!(plt_flow, [0, 0], [p0min, p0max], color=:black, 
-			xlabel="x", ylabel="p", label="x=xf", z_order=:back)
-		plot!(plt_flow, formatter = x -> format(x, precision=2))
-
-		# plot the solution
-		sol = exp(p0_sol)
-		x = [sol(t)[1] for t ∈ sol.t]
-		p = [sol(t)[2] for t ∈ sol.t]
-		
-		plot!(plt_flow, x, p, color=:red, linestyle=:dash, linewidth=0.5, 
-			label="extremal solution", z_order=:back)
-		plot!(plt_flow, [x[end]], [p[end]], seriestype=:scatter, 
-			markersize=5, markerstrokewidth=0.5, color=:green, label=false, z_order=:front)
-
-		# plot the shooting function with the solution
-		plt_shoot = plot(xlims=(p0min, p0max), ylims=(-2, 4), xlabel="p₀", ylabel="y")
-		
-		p0s = range(p0min, p0max, length=500)
-		plot!(plt_shoot, p0s, S, linewidth=2, label="S(p₀)", color=:green, z_order=:front)
-		
-		plot!(plt_shoot, [p0min, p0max], [0, 0], color=:black, label="y=0", z_order=:back)
-		plot!(plt_shoot, [p0_sol, p0_sol], [-2, 0], color=:black, 
-			label="p₀ solution", linestyle=:dash, z_order=:back)
-		plot!(plt_shoot, [p0_sol], [0], seriestype=:scatter, 
-			markersize=5, markerstrokewidth=0.5, color=:green, label=false, z_order=:front)
-		plot!(plt_shoot, formatter = x -> format(x, precision=4))
-
-		return plt_flow, plt_shoot
-	end
-	
-	function plot_extremal!(plt, p0, lw) # add an extremal to a plot
-		sol = exp(p0)
-		x = [sol(t)[1] for t ∈ sol.t]
-		p = [sol(t)[2] for t ∈ sol.t]
-		plot!(plt, x, p, color=:red, label=false, linewidth=lw)
-		return plt
-	end
-	
-	function plot_extremals!(plt, p0s, idx) # add some extremals to a plot
-		idx = idx + 1
-		lw_min = 0.5
-		lw_max = 2
-		N = length(p0s)
-		lws = range(lw_min, lw_max, N)
-		@assert 0 ≤ idx ≤ N
-		for i = 1:idx
-			plot_extremal!(plt, p0s[i], lws[i+N-idx])
-		end
-		return plt
-	end
-
-	T(p0, d) = S(p0) + Jₛ(p0) * d # tangent equation
-	
-	function plot_iterates!(plt, p0s, idx)
-
-		# styles
-		x_style = (color=:red, seriestype=:scatter, markerstrokewidth=0.5, label="", z_order=:front)
-		y_style = (color=:blue, seriestype=:scatter, 
-			markersize=3, markerstrokewidth=0, label="", z_order=:front)
-		a_style = (color=:black, linestyle=:dash, label="")
-    	T_style = (color=:blue, z_order=:back, label="")
-		
-		#
-		idx = idx + 1
-		ms_min = 1
-		ms_max = 5
-		N = length(p0s)
-		mss = range(ms_min, ms_max, N)
-		@assert 0 ≤ idx ≤ N
-		for i = 1:idx
-			plot!(plt, [p0s[i], p0s[i]], [0, S(p0s[i])]; a_style...)
-			plot!(plt, [p0s[i]], [0]; markersize=mss[i+N-idx], x_style...)
-		end
-	
-		a = p0min
-		b = p0max
-		if 2 ≤ idx ≤ N-1 # plot the tangent
-			x = p0s[idx-1]
-			plot!(plt, [x], [S(x)]; y_style...)
-			plot!(plt, [a, b], [T(x, a-x), T(x, b-x)]; T_style...) # tangente
-		end
-		if 1 ≤ idx ≤ N
-			x = p0s[idx]
-			plot!(plt, [x], [S(x)]; y_style...)
-		end
-		
-		return plt
-	end
-
-	function make_zoom(plt_flow, plt_shoot, zoom)
-		# ref limits
-		x1_ref = p0min; x2_ref = p0max; y1_ref = -2 ; y2_ref = 4
-		
-		# ref solution 
-		xc = p0; yc = 0
-		
-		# new limits
-		x1_new = xc - (xc - x1_ref) / 10^(zoom)
-		x2_new = xc - (xc - x2_ref) / 10^(zoom)
-		y1_new = yc - (yc - y1_ref) / 10^(zoom)
-		y2_new = yc - (yc - y2_ref) / 10^(zoom)
-		
-		# limits to center the solution
-		Δx = x2_new - x1_new
-		Δy = y2_new - y1_new
-		a = zoom_min
-		b = zoom_max
-		
-		# combination of original centering and final one when zoom is max
-		x1_new = (b-zoom)/(b-a) * x1_new + (zoom-a)/(b-a) * (xc - Δx/2)
-		x2_new = (b-zoom)/(b-a) * x2_new + (zoom-a)/(b-a) * (xc + Δx/2)
-		y1_new = (b-zoom)/(b-a) * y1_new + (zoom-a)/(b-a) * (yc - Δy/2)
-		y2_new = (b-zoom)/(b-a) * y2_new + (zoom-a)/(b-a) * (yc + Δy/2)
-		
-		# update
-		plot!(plt_shoot, xlims=(x1_new, x2_new), ylims=(y1_new, y2_new))
-
-		# for the extremals
-		x1_deb = -1.1; x2_deb = 1.0; y1_deb = p0min; y2_deb = p0max
-		x1_fin = -1.1; x2_fin = 0.1; y1_fin = 0.000; y2_fin = 0.700
-		x1_new = (b-zoom)/(b-a) * x1_deb + (zoom-a)/(b-a) * x1_fin
-		x2_new = (b-zoom)/(b-a) * x2_deb + (zoom-a)/(b-a) * x2_fin
-		y1_new = (b-zoom)/(b-a) * y1_deb + (zoom-a)/(b-a) * y1_fin
-		y2_new = (b-zoom)/(b-a) * y2_deb + (zoom-a)/(b-a) * y2_fin
-		
-		# update
-		plot!(plt_flow, xlims=(x1_new, x2_new), ylims=(y1_new, y2_new))
-		
-		return plt_flow, plt_shoot
-	end
-
-	plt_flow, plt_shoot = initial_plots(p0); # initial plots
-
-	md"Auxiliary functions"
+qr_code_url = "https://raw.githubusercontent.com/control-toolbox/GdRMOA2023/main/ct-qr-code.svg"
+@htl("""
+	<div style="display: flex;">
+		<div style="flex: 80%; margin-left:20px"> 
+			$( @bind ocp_txt TF )
+		</div>
+		<div style="flex: 5px;"> </div>
+		<div style="flex: 15%;">
+			$(Resource(qr_code_url, :style=>"width:100%; max-width:200px"))
+		</div>
+	</div>
+""")
 end
 
-# ╔═╡ 162f142e-d9ab-4e95-af4d-653e5ec8c975
-# ╠═╡ show_logs = false
-begin 
-	# copy the plt_flow
-	plt_flow_copy = deepcopy(plt_flow)
-	plt_shoot_copy = deepcopy(plt_shoot)
+# ╔═╡ f0cc8166-08b1-499c-a12f-50f7d864c962
+# compute the solution and the plot
+try
+	ocp_name = gensym(:ocp)
+	ocp_e = Meta.parse("begin " * strip(ocp_txt) * " end")
+	ocp_q = quote @def $(ocp_name) $(ocp_e) end
+	eval(ocp_q)
+	ocp = eval(ocp_name)
+	solution = solve(ocp)
+	global solution_plot = myplot(solution)
+catch e
+	solution = nothing
+	global solution_plot = nothing
+	println("Enter a correct Optimal Control problem.")
+end;
 
-	# add extremals
-	if idx ≥ 0
-		plot_extremals!(plt_flow_copy, iterates, idx)
-	end
-
-	# add iterates on the plot of shooting function
-	if idx ≥ 0
-		plot_iterates!(plt_shoot_copy, iterates, idx)
-	end
-
-	# limits and zoom
-	make_zoom(plt_flow_copy, plt_shoot_copy, zoom)
-
-	# plot all
-	plot(plt_flow_copy, plt_shoot_copy, layout=(1,2), size=(900, 450), 
-		leftmargin=5mm, bottommargin=5mm)
-end
-
-# ╔═╡ 45a81a29-82eb-4280-a965-ae1afe89091f
-TableOfContents(depth=2)
-
-# ╔═╡ 562ae176-9781-4820-942f-9a3cccf9c732
+# ╔═╡ d47ac41c-d650-49ce-bbfc-82777ab3fa78
 begin
-	struct TwoColumns{L, R}
-	    left::L
-	    right::R
-		lwidth::Integer
-		rwidth::Integer
-		function TwoColumns(l::L, r::R; lwidth=45) where {L, R}
-			new{L, R}(l, r, lwidth, 100-5-lwidth)
-		end
+	if solution_plot !== nothing
+	@htl("""
+		<div style="margin-left:20px">
+			$( embed_display(solution_plot) )
+		</div>
+	""")
 	end
-	
-	function Base.show(io, mime::MIME"text/html", tc::TwoColumns)
-	    write(io, """<div style="display: flex;">
-		<div style="flex: $(tc.lwidth)%;">""")
-	    show(io, mime, tc.left)
-		write(io, """</div><div style="flex: 5%;">""")
-	    write(io, """</div><div style="flex: $(tc.rwidth)%;">""")
-	    show(io, mime, tc.right)
-	    write(io, """</div></div>""")
-	end
-
-	struct Foldable{C}
-	    title::String
-	    content::C
-	end
-	
-	function Base.show(io, mime::MIME"text/html", fld::Foldable)
-	    write(io,"<details><summary>$(fld.title)</summary><p>")
-	    show(io, mime, fld.content)
-	    write(io,"</p></details>")
-	end
-	
-	#Foldable("What is the gravitational acceleration?", md"Correct, it's ``\pi^2``.") 
-	md"Declaration of useful tools."
 end
 
-# ╔═╡ 7e8b0e71-cefe-444c-be6e-446f1e47722b
-begin
-	qr_code_url = "https://raw.githubusercontent.com/control-toolbox/GdRMOA2023/main/ct-qr-code.svg"
-	TwoColumns(
-	md"""
-	$(Resource(qr_code_url, :style => "width:100%"))
-	""",
-	md"""
-	!!! info "Link to this notebook"
-		
-		<https://control-toolbox.org/GdRMOA2023/indirect.html>
-	
-	To launch it:
-		
-	```julia
-	using Pkg
-	Pkg.add("Pluto")
-	using Pluto
-	Pluto.run()
-	```
-	""",
-		lwidth=30
-	)
-end
-
-# ╔═╡ c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
+# ╔═╡ bd152431-db1b-4203-9f66-62f88e6eab38
 begin
 	html"""<style>
+		pluto-logs{
+			height: 300px;
+		}
 		main {
 			margin: 0 auto !important;
 		    position: relative;
-		    width: auto;
 		    padding-top: 0px;
-		    max-width: 1100px !important;
+		    max-width: 1300px !important;
 		    padding-left: 0%;
 		    padding-right: 10%;
 		    text-align: justify;
@@ -550,28 +120,44 @@ begin
 		    width: min(80vw, 400px) !important;
 		}
 	</style>
-	css style.
+	Hidden css style.
 	"""
 end
+
+# ╔═╡ 148caf01-8f4d-484f-a6c4-52b818b0b7cd
+html"<button onclick='present()'>Presentation mode: Enter / Leave</button>"
+
+# ╔═╡ 3feac8d7-1f69-41af-9448-0fcaa1c577c2
+md"# Simple example"
+
+# ╔═╡ 453ec6aa-dad9-4bbe-a9c2-24edb5aea57f
+md"""Enter a function to visualize: 
+$( @bind fun_txt TextField((30, 1), "x -> 2x") )
+"""
+
+# ╔═╡ 99080477-b46a-4e02-b992-3edd40356810
+begin
+	try
+		f = eval(Meta.parse(strip(fun_txt)))
+		plot(f)
+	catch e
+		println("Enter a correct function.")
+	end
+end
+
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-Formatting = "59287772-0a20-5a39-b81b-1366585eb4c0"
-ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
 OptimalControl = "5f98b655-cc9a-415a-b60e-744165666948"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-PlutoTeachingTools = "661c6b06-c737-4d37-b85c-46df65de6f69"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
-Formatting = "~0.4.2"
-ForwardDiff = "~0.10.36"
 HypertextLiteral = "~0.9.4"
 OptimalControl = "~0.7.6"
 Plots = "~1.39.0"
-PlutoTeachingTools = "~0.2.13"
 PlutoUI = "~0.7.52"
 """
 
@@ -581,7 +167,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "caf0bf420e884b93870a6e309817bc7cb10cfcf1"
+project_hash = "3524fa47ff14a1cbcde07ac170d2cd6883663b3a"
 
 [[deps.ADNLPModels]]
 deps = ["ColPack", "ForwardDiff", "LinearAlgebra", "NLPModels", "Requires", "ReverseDiff", "SparseArrays"]
@@ -764,12 +350,6 @@ deps = ["Static", "StaticArrayInterface"]
 git-tree-sha1 = "70232f82ffaab9dc52585e0dd043b5e0c6b714f1"
 uuid = "fb6a15b2-703c-40df-9091-08a04967cfa9"
 version = "0.1.12"
-
-[[deps.CodeTracking]]
-deps = ["InteractiveUtils", "UUIDs"]
-git-tree-sha1 = "a1296f0fe01a4c3f9bf0dc2934efbf4416f5db31"
-uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
-version = "1.3.4"
 
 [[deps.CodecBzip2]]
 deps = ["Bzip2_jll", "Libdl", "TranscodingStreams"]
@@ -1378,12 +958,6 @@ git-tree-sha1 = "6f2675ef130a300a112286de91973805fcc5ffbc"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
 version = "2.1.91+0"
 
-[[deps.JuliaInterpreter]]
-deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
-git-tree-sha1 = "81dc6aefcbe7421bd62cb6ca0e700779330acff8"
-uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
-version = "0.9.25"
-
 [[deps.KLU]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse_jll"]
 git-tree-sha1 = "884c2968c2e8e7e6bf5956af88cb46aa745c854b"
@@ -1621,12 +1195,6 @@ weakdeps = ["ChainRulesCore", "ForwardDiff", "SpecialFunctions"]
     [deps.LoopVectorization.extensions]
     ForwardDiffExt = ["ChainRulesCore", "ForwardDiff"]
     SpecialFunctionsExt = "SpecialFunctions"
-
-[[deps.LoweredCodeUtils]]
-deps = ["JuliaInterpreter"]
-git-tree-sha1 = "60168780555f3e663c536500aa790b6368adc02a"
-uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
-version = "2.3.0"
 
 [[deps.METIS_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1915,24 +1483,6 @@ version = "1.39.0"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
-[[deps.PlutoHooks]]
-deps = ["InteractiveUtils", "Markdown", "UUIDs"]
-git-tree-sha1 = "072cdf20c9b0507fdd977d7d246d90030609674b"
-uuid = "0ff47ea0-7a50-410d-8455-4348d5de0774"
-version = "0.0.5"
-
-[[deps.PlutoLinks]]
-deps = ["FileWatching", "InteractiveUtils", "Markdown", "PlutoHooks", "Revise", "UUIDs"]
-git-tree-sha1 = "8f5fa7056e6dcfb23ac5211de38e6c03f6367794"
-uuid = "0ff47ea0-7a50-410d-8455-4348d5de0420"
-version = "0.1.6"
-
-[[deps.PlutoTeachingTools]]
-deps = ["Downloads", "HypertextLiteral", "LaTeXStrings", "Latexify", "Markdown", "PlutoLinks", "PlutoUI", "Random"]
-git-tree-sha1 = "542de5acb35585afcf202a6d3361b430bc1c3fbd"
-uuid = "661c6b06-c737-4d37-b85c-46df65de6f69"
-version = "0.2.13"
-
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
 git-tree-sha1 = "e47cd150dbe0443c3a3651bc5b9cbd5576ab75b7"
@@ -2093,12 +1643,6 @@ deps = ["ChainRulesCore", "DiffResults", "DiffRules", "ForwardDiff", "FunctionWr
 git-tree-sha1 = "d1235bdd57a93bd7504225b792b867e9a7df38d5"
 uuid = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 version = "1.15.1"
-
-[[deps.Revise]]
-deps = ["CodeTracking", "Distributed", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Pkg", "REPL", "Requires", "UUIDs", "Unicode"]
-git-tree-sha1 = "609c26951d80551620241c3d7090c71a73da75ab"
-uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
-version = "3.5.6"
 
 [[deps.Rmath]]
 deps = ["Random", "Rmath_jll"]
@@ -2832,33 +2376,19 @@ version = "1.4.1+1"
 """
 
 # ╔═╡ Cell order:
-# ╟─89d454b5-5077-42a9-9ea9-e44b9a4f0be1
-# ╟─7e8b0e71-cefe-444c-be6e-446f1e47722b
-# ╟─13e743c6-0313-44a3-8a88-c64657ee7a34
-# ╟─301e03aa-00e9-47e0-b9ab-f00787bff820
-# ╠═76175aca-885b-4f7a-8883-4b0002297576
-# ╟─2bd8abe2-6531-11ee-38f5-5becee44a42f
-# ╠═016e2375-6fc1-4496-a094-0be801dfca17
-# ╟─422e9ce0-1012-47e0-ad03-c4cd3ebbd0ed
-# ╟─6784a1c0-1f8b-4e6c-8bf4-1260ddfee22f
-# ╠═17b04d51-f8db-44e9-863b-de6a75cc3327
-# ╠═49b0fa4c-11fe-4b4e-ba13-caa7a172aa20
-# ╟─7466eab0-85c7-43c9-bbfb-419d888571e3
-# ╠═9b530a46-1f8d-43f5-9e30-167d35c245f9
-# ╠═ee4d6d59-2965-4233-b991-3778e06fd233
-# ╟─633515a6-0d41-4c80-be2f-0be8f8d5ec3e
-# ╠═2f07ceb7-1133-48f8-b807-b14fbdf50754
-# ╠═f9077dd0-7ae7-49bd-a538-103a571928fc
-# ╠═703868e1-d368-482a-a617-65a1fdef13b2
-# ╠═3a992e9c-1c16-40d9-a76a-2364494a2dda
-# ╟─b853f0c8-a8b9-4d26-bc41-bf119f50ccd6
-# ╟─8ddb54a9-a197-4f66-a5a0-f4ab01c45564
-# ╟─162f142e-d9ab-4e95-af4d-653e5ec8c975
-# ╟─d945e217-59e0-4a55-9381-fab63947f0fb
-# ╠═45a81a29-82eb-4280-a965-ae1afe89091f
-# ╟─c33b7143-3736-4067-aca1-19052169765f
-# ╟─74d3eafa-09d7-4187-b4dd-21312f964581
-# ╟─562ae176-9781-4820-942f-9a3cccf9c732
-# ╟─c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
+# ╟─1e741a71-92c7-4048-a1d0-4deb75897b56
+# ╟─0768852b-ca08-40a7-a6ef-4e8c68058a4a
+# ╟─e914d323-b344-472b-8ab7-0a5680d4c580
+# ╟─d47ac41c-d650-49ce-bbfc-82777ab3fa78
+# ╟─f0cc8166-08b1-499c-a12f-50f7d864c962
+# ╠═8a272676-6205-4e64-9e53-4dfc2c50e447
+# ╟─1e587c97-66ae-46db-b466-ea2f4c56fb2b
+# ╠═2025030d-1b45-45d5-a06f-15cda678bb6e
+# ╠═05a95004-677d-11ee-042e-01ad951b3010
+# ╠═bd152431-db1b-4203-9f66-62f88e6eab38
+# ╠═148caf01-8f4d-484f-a6c4-52b818b0b7cd
+# ╟─3feac8d7-1f69-41af-9448-0fcaa1c577c2
+# ╟─453ec6aa-dad9-4bbe-a9c2-24edb5aea57f
+# ╟─99080477-b46a-4e02-b992-3edd40356810
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
