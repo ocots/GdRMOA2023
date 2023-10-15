@@ -26,3 +26,7 @@ plus boundary, control and state constraints. We present:
 - [a brief explanation of the direct method](https://control-toolbox.org/docs/ctdirect/stable/)
 - the `OptimalControl.jl` package on a [basic example](https://control-toolbox.org/docs/optimalcontrol/stable/tutorial-basic-example.html)
 - a more [advanced example: the Goddard problem](https://control-toolbox.org/docs/optimalcontrol/stable/tutorial-goddard.html), which combines direct and indirect methods.
+
+For fun!
+
+[ct playground](https://control-toolbox.org/GdRMOA2023/ct-playground.html)
