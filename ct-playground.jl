@@ -46,6 +46,9 @@ end;
 # ╔═╡ 1e587c97-66ae-46db-b466-ea2f4c56fb2b
 md"# Appendix"
 
+# ╔═╡ 148caf01-8f4d-484f-a6c4-52b818b0b7cd
+html"<button onclick='present()'>Presentation mode: Enter / Leave</button>"
+
 # ╔═╡ 2025030d-1b45-45d5-a06f-15cda678bb6e
 TF = TextField((100, 10), "
 t ∈ [ 0, 1 ], time
@@ -123,9 +126,6 @@ begin
 	Hidden css style.
 	"""
 end
-
-# ╔═╡ 148caf01-8f4d-484f-a6c4-52b818b0b7cd
-html"<button onclick='present()'>Presentation mode: Enter / Leave</button>"
 
 # ╔═╡ 3feac8d7-1f69-41af-9448-0fcaa1c577c2
 md"# Simple example"

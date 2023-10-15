@@ -18,29 +18,32 @@ end
 # ╠═╡ show_logs = false
 begin
 	using Formatting
+	using ForwardDiff
+	using HypertextLiteral
+	using Ipopt
+	import JuMP: JuMP
+	using OptimalControl
+	using Plots
+	using Plots.PlotMeasures # for leftmargin, bottommargin
 	using PlutoUI
 	using PlutoTeachingTools
-	using HypertextLiteral
-	using OptimalControl
-	using ForwardDiff
-	using Plots.PlotMeasures # for leftmargin, bottommargin
 	md"Needed packages for the presentation."
 end
 
 # ╔═╡ 89d454b5-5077-42a9-9ea9-e44b9a4f0be1
-md"# An introduction to indirect shooting
+md"# An introduction to direct and indirect methods
 
 Olivier Cots (Univ. Toulouse)
 
 Journées annuelles 2023 du GdR MOA, 18 octobre 2023
 
-**Abstract.** In this tutorial we introduce the indirect shooting method on basic examples."
+**Abstract.** In this tutorial we introduce the indirect shooting method and the direct method on a basic example."
 
 # ╔═╡ 13e743c6-0313-44a3-8a88-c64657ee7a34
 html"<button onclick='present()'>Presentation mode: Enter / Leave</button>"
 
 # ╔═╡ 301e03aa-00e9-47e0-b9ab-f00787bff820
-md"## Basic example
+md"# Basic example
 
 Let us consider problem which consists in minimising the $L^2$-norm of the control
 
@@ -64,6 +67,7 @@ where $t_0 = 0$, $t_f = 1$, $x_0 = -1$, $x_f = 0$ and $\alpha=1.5$.
 "
 
 # ╔═╡ 76175aca-885b-4f7a-8883-4b0002297576
+# we use the OptimalControl.jl package to define the optimal control problem
 begin
 	t0 = 0
 	tf = 1
@@ -80,6 +84,80 @@ begin
 	    ∫( 0.5u(t)^2 ) → min
 	end
 end;
+
+# ╔═╡ e18cc0fa-e1cc-45de-b0ab-b7dadc5d27d6
+md"""# Indirect simple shooting
+
+➡ Let us consider:
+
+```math
+    \mathrm{(OCP)}~
+    \left\{ 
+        \begin{array}{l}
+            \min \displaystyle \int_{0}^{t_f} f^0(x(t),u(t)) \, \mathrm{d} t \\[1.0em]
+            \dot{x}(t) = \displaystyle f(x(t),u(t)), 
+            \quad  u(t) \in \mathbb{R}^m,
+            \quad t \in [0, t_f] \text{ p.p.}, \\[1.0em]
+            x(0) = x_0, \quad x(t_f) = x_f,
+        \end{array}
+    \right.
+```
+
+where $x_0$, $x_f$ and $t_f>0$ are fixed and we seek $u$ in $L^\infty([0, t_f],\mathbb{R}^m)$.
+
+➡ From Pontryagin's Maximum Principle (PMP), if $(x, u)$ is solution to (OCP) under usual assumptions,
+then, there exists a costate $p(\cdot) \in AC([0, t_f] ,\mathbb{R}^n)$, a scalar $p^0\in \{-1, 0\}$, 
+such that $(p(\cdot), p^0)\ne(0,0)$ and for $t \in [0, t_f]$ a.e.:
+
+```math
+	\dot{x}(t) =  \nabla_p H(x(t),p(t),u(t)), \quad
+	\dot{p}(t) = -\nabla_x H(x(t),p(t),u(t)),
+```
+
+where $H(x,p,u) := ({p}\,|\,{f(x,u)}) + p^0 \, f^0(x,u)$. Moreover, we have the maximisation condition:
+
+```math
+    H(x(t),p(t),u(t)) = \max_{{w\in U}} H(x(t),p(t),{w}).
+```
+
+➡ Let us assume that for any extremal $(z(\cdot), p^0, u(\cdot))$, with $z=(x, p)$, 
+we can write $u(t) = u(z(t))$, with $z \mapsto u(z)$ at least of class $\mathcal{C}^1$.
+Plugging $u(z)$ into $\vec{H} = (\nabla_p H, -\nabla_x H)$, find a solution to the PMP consists if solving
+the Boundary Value Problem (BVP):
+
+```math
+    \mathrm{(BVP)}~
+    \left\{ 
+        \begin{aligned}
+            \dot{z}(t) &= \vec{H}(z(t), u(z(t))), \\[0.5em]
+            0_{\mathbb{R}^{2n}} &= (x(0) - x_0, x(t_f) - x_f).
+        \end{aligned}
+    \right.
+```
+
+This (BVP) can be written as a set of nonlinear equations introducing:
+
+```math
+	\begin{array}{rlll}
+        S \colon    & \mathbb{R}^n    & \longrightarrow   & \mathbb{R}^n \\
+        & p_0     & \longmapsto       & S(p_0) := \pi(z(t_f,x_0,p_0)) - x_f,
+    \end{array}
+```
+
+where $\pi(x,p) = x$ and where $z(\cdot,x_0,p_0)$ is the solution of the Cauchy problem
+$\dot{z}(t) = \vec{H}(z(t), u(z(t)))$, $z(0) = (x_0,p_0)$.
+
+➡ At the end, solving (BVP) is equivalent to solve $S(p_0) = 0$.
+This is what we call the **indirect simple shooting method**.
+
+➡ Summary:
+
+```julia
+BVP = PMP(OCP, u) # u being the maximising control
+S = Shooting(BVP) # return the shooting function
+```
+
+"""
 
 # ╔═╡ 2bd8abe2-6531-11ee-38f5-5becee44a42f
 md"## Maximising control
@@ -122,7 +200,7 @@ and considering the limit conditions $x(0)=x_0$, $x(t_f)=x_f$,
 leads to the definition of the Boundary Value Problem (BVP)
 
 ```math
-    \left\{ 
+    \mathrm{(BVP)}~\left\{ 
         \begin{array}{l}
             \dot{x}(t)  = \phantom{-} \nabla_p H[t] = -x(t) + \alpha x^2(t) + u(x(t), p(t)) 
             = -x(t) + \alpha x^2(t) + p(t), \\[0.5em]
@@ -136,13 +214,15 @@ where $[t] =  (x(t),p(t),u(x(t), p(t)))$.
 
 !!! note "Nota bene"
 
-    Our goal is to solve this (BVP).
+    Our goal is to solve this (BVP). Solving (BVP) consists in solving the PMP which provides 
+	necessary conditions of optimality. 
 """
 
 # ╔═╡ 6784a1c0-1f8b-4e6c-8bf4-1260ddfee22f
 md"""## Hamiltonian vector field
 
-To achive our goal, that is to solve the (BVP), let us first introduce the pseudo-Hamiltonian vector field notation
+To achive our goal, that is to solve the (BVP), let us first introduce the pseudo-Hamiltonian 
+vector field notation
 
 ```math
     \vec{H}(z,u) = \left( \nabla_p H(z,u), -\nabla_x H(z,u) \right), \quad z = (x,p),
@@ -183,7 +263,7 @@ To compute $\varphi$ with the `OptimalControl` package, we define the flow of th
 # ╔═╡ 7466eab0-85c7-43c9-bbfb-419d888571e3
 md"""## Shooting method
 
-Now, we are in position to define mathematically the equation we have to solve in order to solve the (BVP).
+Now, we are in position to define mathematically the equation we have to solve in order to solve (BVP).
 
 We introduce the **shooting function**.
 
@@ -199,26 +279,21 @@ This is what we call the **indirect simple shooting method**.
 """
 
 # ╔═╡ 9b530a46-1f8d-43f5-9e30-167d35c245f9
+# definition of the state projection
 begin
 	π(x, p) = x
 	π(z::Tuple{Number, Number}) = π(z...) # z = (x, p)
 end;
 
 # ╔═╡ ee4d6d59-2965-4233-b991-3778e06fd233
+# shooting function
 S(p0) = π( φ(t0, x0, p0, tf) ) - xf;
 
 # ╔═╡ 633515a6-0d41-4c80-be2f-0be8f8d5ec3e
-md"""**Newton solver.** Let us recall the basics of the Newton method. The Newton iteration is
+md"""**Newton solver.** Let us recall the basics of the Newton method. 
 
-```math
-p_0^{(k+1)} = p_0^{(k)} + d^{(k)},
-```
-
-with $d^{(k)}$ the solution of the linear system
-
-```math
-J_S(p_0^{(k)}) \cdot d = - S(p_0^{(k)}).
-```
+The Newton iteration is $p_0^{(k+1)} = p_0^{(k)} + d^{(k)},$
+with $d^{(k)}$ the solution of the linear system $J_S(p_0^{(k)}) \cdot d = - S(p_0^{(k)}).$
 
 """
 
@@ -245,6 +320,9 @@ iterates
 # ╠═╡ show_logs = false
 S.(iterates)
 
+# ╔═╡ ece70549-23fb-4683-accc-6f58d2e591bf
+p0_solution = p0
+
 # ╔═╡ b853f0c8-a8b9-4d26-bc41-bf119f50ccd6
 md"""## Plots
 
@@ -261,8 +339,236 @@ begin
 	"""
 end
 
+# ╔═╡ a84f2989-99dc-4238-b0ab-452fb414239c
+md"""# Direct method
+
+Let consider a Mayer problem (for the presentation):
+
+```math
+\min\, g(x(t_0), x(t_f))
+```
+
+where the state $x$ and the control $u$ are functions subject, for $t \in [t_0, t_f]$,
+to the differential constraint
+
+```math
+   \dot{x}(t) = f(t, x(t), u(t))
+```
+
+and other constraints such as
+
+```math
+\begin{array}{llcll}
+~\xi_l  &\le& \xi(t, u(t))        &\le& \xi_u, \\
+\eta_l &\le& \eta(t, x(t))       &\le& \eta_u, \\
+\psi_l &\le& \psi(t, x(t), u(t)) &\le& \psi_u, \\
+\phi_l &\le& \phi(t_0, x(t_0), t_f, x(t_f)) &\le& \phi_u.
+\end{array}
+```
+
+The so-called direct approach transforms the infinite dimensional optimal control problem (OCP) into a 
+finite dimensional optimization problem (NLP). This is done by a discretization in time by Runge-Kutta 
+methods applied to the state and control variables, as well as the dynamics equation. These methods
+are usually less precise than indirect methods based on Pontryagin’s Maximum Principle, 
+but more robust with respect to the initialization. Also, they are more straightforward to apply, 
+hence their wide use in industrial applications.
+
+Example of the time discretization by the trapezoidal rule:
+
+```math
+\begin{array}{lcl}
+t \in [t_0,t_f]   & \to & \{t_0, \ldots, t_N=t_f\}\\[0.2em]
+x(\cdot),\, u(\cdot) & \to & X=\{x_0, \ldots, x_N, u_0, \ldots, u_N\} \\[1em]
+\hline
+\\
+\text{step} & \to & h = (t_f-t_0)/N\\[0.2em]
+\text{criterion} & \to & \min\ g(x_0, x_N) \\[0.2em]
+\text{dynamics}  & \to & x_{i+i} = x_i + (h/2)\, (f(t_i, x_i, u_i) + f(t_{i+1}, x_{i+1}, u_{i+1})) \\[0.2em]
+\text{control constraints} &\to& \xi_l  \le  \xi(t_i, u_i)   \le \xi_u \\[0.2em]
+\text{path constraints} &\to& \eta_l \le \eta(t_i, x_i)        \le \eta_u \\[0.2em]
+\text{mixed constraints} &\to& \psi_l \le \psi(t_i, x_i, u_i) \le \psi_u \\[0.2em]
+\text{limit conditions} &\to& \phi_l \le \phi(x_0, x_N) \le \phi_u
+\end{array}
+```
+
+We therefore obtain a nonlinear programming problem on the discretized state and control variables of the 
+general form:
+
+```math
+\mathrm{(NLP)}~ \left\{
+\begin{array}{lr}
+\min \ F(X) \\
+LB \le C(X) \le UB
+\end{array}
+\right.
+```
+
+Summary:
+
+```julia
+NLP = Direct(OCP, scheme) # scheme is in general a Runge-Kutta scheme
+```
+
+"""
+
+# ╔═╡ dd66e904-468f-44b9-b989-3547e52f072b
+md"""## Euler
+
+The **Euler scheme** to integrate the Cauchy problem $\dot{x} = f(t, x, u)$, $x(t_0) = x_0$, is given by
+
+```math
+\left\{
+\begin{array}{l}
+x_{i+1} = x_i + h\, f(t_i, x_i, u_i), \\
+x_0 = x(t_0).
+\end{array}
+\right.
+```
+
+!!! note "Basic problem"
+
+	Let us recall the problem:
+	
+	```math
+	        \min \frac{1}{2} \int_{t_0}^{t_f} u^2(t) \, \mathrm{d} t \quad \text{with} \quad 
+	        \dot{x}(t) = -x(t) + \alpha x^2(t) + u(t), \quad  u(t) \in \mathbb{R}
+	```
+	
+	and the limit conditions $x(t_0) = x_0$, $x(t_f) = x_f$, 
+	where $t_0 = 0$, $t_f = 1$, $x_0 = -1$, $x_f = 0$ and $\alpha=1.5$.
+
+"""
+
+# ╔═╡ 20142a45-ccd4-49f3-badb-440b7bd070ec
+function Euler(N)
+	"""
+		N: size of the grid
+	"""
+
+	# JuMP model with Ipopt solver
+	nlp = JuMP.Model(JuMP.optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 5))
+	
+	# options
+	JuMP.set_optimizer_attribute(nlp, "tol", 1e-8)
+	JuMP.set_optimizer_attribute(nlp, "constr_viol_tol", 1e-6)
+	JuMP.set_optimizer_attribute(nlp, "max_iter", 1000)
+	
+	# t0 = 0, tf = 1, x0 = -1, xf = 0, α  = 1.5
+	
+	# parameters
+	c0 = 0.    		# initial cost
+	h  = (tf-t0)/N  # step length
+
+	# variables
+	nlp[:variables] = JuMP.@variables(nlp, begin
+		c[1:N+1] 	# cost
+		x[1:N+1]    # state
+		u[1:N+1]    # control
+	end)
+	
+	# objective function
+	JuMP.@objective(nlp, Min, c[N+1])
+	
+	# initial and final conditions
+	nlp[:cons] = JuMP.@constraints(nlp, begin
+		con_c0, c[1] - c0 == 0
+		con_x0, x[1] - x0 == 0
+		con_xf, x[N+1] - xf == 0
+		con_uf, u[N+1] - u[N] == 0
+	end)
+	
+	# dynamics with Euler scheme
+	nlp[:dcons] = JuMP.@NLconstraints(nlp, begin
+		con_dc[i=1:N], c[i+1] == c[i] + h * ( u[i]^2 / 2 )
+		con_dx[i=1:N], x[i+1] == x[i] + h * ( -x[i] + α*x[i]^2 + u[i] )
+	end);
+	
+	nlp[:step_length] = h
+	nlp[:scheme] = :euler
+
+	return nlp
+end;
+
+# ╔═╡ 573cdfec-5330-4d2d-98d2-540c90be9c06
+md"""## Trapezoidal rule
+
+The **Trapezoidal rule** to integrate the Cauchy problem $\dot{x} = f(t, x, u)$, $x(t_0) = x_0$, is given by
+
+```math
+\left\{
+\begin{array}{l}
+\displaystyle x_{i+1} = x_i + \frac{h}{2}\, \big(f(t_i, x_i, u_i) + f(t_{i+1}, x_{i+1}, u_{i+1})\big) \\[0.2em]
+x_0 = x(t_0).
+\end{array}
+\right.
+```
+
+"""
+
+# ╔═╡ e6394522-03c9-467b-9408-ea1b1eee2b47
+function Trapezoidal(N)
+	"""
+		N: size of the grid
+	"""
+
+	# JuMP model with Ipopt solver
+	nlp = JuMP.Model(JuMP.optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 5))
+	
+	# options
+	JuMP.set_optimizer_attribute(nlp, "tol", 1e-8)
+	JuMP.set_optimizer_attribute(nlp, "constr_viol_tol", 1e-6)
+	JuMP.set_optimizer_attribute(nlp, "max_iter", 1000)
+	
+	# t0 = 0, tf = 1, x0 = -1, xf = 0, α  = 1.5
+	
+	# parameters
+	c0 = 0.    		# initial cost
+	h  = (tf-t0)/N  # step length
+
+	# variables
+	nlp[:variables] = JuMP.@variables(nlp, begin
+		c[1:N+1] 	# cost
+		x[1:N+1]    # state
+		u[1:N+1]    # control
+	end)
+	
+	# objective function
+	JuMP.@objective(nlp, Min, c[N+1])
+	
+	# initial and final conditions
+	nlp[:cons] = JuMP.@constraints(nlp, begin
+		con_c0, c[1] - c0 == 0
+		con_x0, x[1] - x0 == 0
+		con_xf, x[N+1] - xf == 0
+	end)
+	
+	# dynamics
+	JuMP.@NLexpression(nlp, dc[i=1:N+1], u[i]^2 / 2)
+    JuMP.@NLexpression(nlp, dx[i=1:N+1], -x[i] + α*x[i]^2 + u[i])
+
+	# Trapezoidal scheme
+	nlp[:dcons] = JuMP.@NLconstraints(nlp, begin
+		con_dc[i=1:N], c[i+1] == c[i] + 0.5 * h * ( dc[i] + dc[i+1] )
+		con_dx[i=1:N], x[i+1] == x[i] + 0.5 * h * ( dx[i] + dx[i+1] )
+	end);
+
+	nlp[:step_length] = h
+	nlp[:scheme] = :trapezoidal
+
+	return nlp
+end;
+
+# ╔═╡ 6daaa6cc-2937-4a2b-b991-e7bdbc696e4c
+md"## Plots"
+
+# ╔═╡ c93b4007-b1b5-405d-bd64-f9ea1e0ed906
+@bind N NumberField(1:1000, default=10)
+
 # ╔═╡ d945e217-59e0-4a55-9381-fab63947f0fb
 md"# Appendix"
+
+# ╔═╡ 45a81a29-82eb-4280-a965-ae1afe89091f
+TableOfContents(depth=2)
 
 # ╔═╡ c33b7143-3736-4067-aca1-19052169765f
 # ╠═╡ show_logs = false
@@ -439,7 +745,7 @@ begin
 
 	plt_flow, plt_shoot = initial_plots(p0); # initial plots
 
-	md"Auxiliary functions"
+	md"Auxiliary functions: indirect shooting"
 end
 
 # ╔═╡ 162f142e-d9ab-4e95-af4d-653e5ec8c975
@@ -467,8 +773,165 @@ begin
 		leftmargin=5mm, bottommargin=5mm)
 end
 
-# ╔═╡ 45a81a29-82eb-4280-a965-ae1afe89091f
-TableOfContents(depth=2)
+# ╔═╡ 23fb8acf-ab93-4392-9a94-c17ae408eb54
+# ╠═╡ show_logs = false
+begin
+	
+	function jump_solve(nlp)
+	
+		# Solve for the control and state
+		println("Solving...")
+		JuMP.optimize!(nlp)
+		println()
+		
+		# Display results
+		if JuMP.termination_status(nlp) == JuMP.MOI.OPTIMAL
+		    println("  Solution is optimal")
+		elseif  JuMP.termination_status(nlp) == JuMP.MOI.LOCALLY_SOLVED
+		    println("  (Local) solution found")
+		elseif JuMP.termination_status(nlp) == JuMP.MOI.TIME_LIMIT && has_values(nlp)
+		    println("  Solution is suboptimal due to a time limit, but a primal solution is available")
+		else
+		    error("  The model was not solved correctly.")
+		end
+		println("  objective value = ", JuMP.objective_value(nlp))
+		println()
+		
+		# Retrieves values (including duals)
+		c  = JuMP.value.(nlp[:variables][1])[:]
+		x  = JuMP.value.(nlp[:variables][2])[:]
+		u  = JuMP.value.(nlp[:variables][3])[:]
+		N  = length(c)-1
+		t  = (0:N) * nlp[:step_length]
+		
+		#
+		con_c0 = nlp[:cons][1]
+		con_x0 = nlp[:cons][2]
+		con_xf = nlp[:cons][3]
+		#
+		pc0 = JuMP.dual(con_c0)
+		px0 = JuMP.dual(con_x0)
+		pxf = JuMP.dual(con_xf)
+	
+		#
+		con_dc = nlp[:dcons][1]
+		con_dx = nlp[:dcons][2]
+			
+		if(pc0*JuMP.dual(con_dc[1])<0); pc0 = -pc0; end
+		if(px0*JuMP.dual(con_dx[1])<0); px0 = -px0; end
+		if(pxf*JuMP.dual(con_dx[N])<0); pxf = -pxf; end
+		
+		if (pc0 > 0) # Sign convention according to Pontryagin Maximum Principle
+		    sign = -1.0
+		else
+		    sign =  1.0
+		end
+		
+		pc = [ JuMP.dual(con_dc[i]) for i in 1:N ]
+		px = [ JuMP.dual(con_dx[i]) for i in 1:N ]
+		
+		pc = sign * [pc0; pc[1:N]]
+	
+		if nlp[:scheme] == :euler
+			px = sign * [px0; px[1:N]];
+		else
+			px = sign * [px0; (px[1:N-1]+px[2:N])/2; pxf]; # We add the multiplier from the limit conditions
+		end
+		
+		return t, x, u, c, px, pc
+	end;
+
+	function direct_initial_plot(p0_sol)
+
+		# cotangent space
+		times = range(t0, tf, length=2) # times for wavefronts
+
+		# plot of the flow
+		plt_flow = plot()
+		
+		p0s = 0.1.+range(p0min, p0max, length=20)	# range for the extremals
+		for i ∈ 1:length(p0s)
+		    sol = exp(p0s[i])
+		    x = [sol(t)[1] for t ∈ sol.t]
+		    p = [sol(t)[2] for t ∈ sol.t]
+		    label = false
+		    plot!(plt_flow, x, p, color=:black, label=label, z_order=:back, linewidth=0.5)
+		end
+
+		if false
+			# plot of wavefronts
+			p0s = range(p0min, p0max, length=200)	# range to get points on the wavefronts
+			xs  = zeros(length(p0s), length(times))
+			ps  = zeros(length(p0s), length(times))
+			for i ∈ 1:length(p0s)	# get points on the wavefronts
+			    sol = exp(p0s[i], saveat=times)
+			    xs[i, :] = [z[1] for z ∈ sol.(times)]
+			    ps[i, :] = [z[2] for z ∈ sol.(times)]
+			end
+			
+			for j ∈ 1:length(times) # plot the wavefronts
+			    label = false
+			    plot!(plt_flow, xs[:, j], ps[:, j], color=:black, linewidth=1, 
+					label=label, z_order=:front)
+			end
+		end
+		plot!(plt_flow, [0, 0], [p0min, p0max], color=:black, 
+			xlabel="x", ylabel="p", label=false, z_order=:back)
+		plot!(plt_flow, formatter = x -> format(x, precision=2))
+		plot!(plt_flow, xlims = (-1.1, 0.25), ylims =  (-0.25, 1))
+
+		# plot the solution
+		sol = exp(p0_sol)
+		x = [sol(t)[1] for t ∈ sol.t]
+		p = [sol(t)[2] for t ∈ sol.t]
+		
+		plot!(plt_flow, x, p, color=:red, linestyle=:dash, linewidth=1, 
+			label="solution", z_order=:back)
+		plot!(plt_flow, [x[end]], [p[end]], seriestype=:scatter, 
+			markersize=5, markerstrokewidth=0.5, color=:green, label=false, z_order=:front)
+		
+		# control
+		plt_control = plot(xlabel="t", ylabel="u")
+
+		# combine
+		plt = plot(plt_flow, plt_control, layout=(1, 2), size=(900, 450), leftmargin=5mm, bottommargin=5mm)
+		
+		#
+		return plt
+		
+	end
+	
+	function direct_plot!(plt, t, x, u, p, scheme, color)
+		plt_flow = plt[1]
+		plt_control = plt[2]
+		plot!(plt_flow, x, p, label=string(scheme), color=color, linewidth=2)
+		plot!(plt_control, t, u, linetype=:steppost, label=string(scheme), color=color, linewidth=2)
+		return plt
+	end
+
+	plt_direct = direct_initial_plot(p0_solution)
+	
+	md"Auxiliary function: direct method"
+end
+
+# ╔═╡ e90b0d60-bc2f-4d24-af93-178413aae187
+# ╠═╡ show_logs = false
+begin 
+
+	#
+	plt = deepcopy(plt_direct)
+	
+	# Euler
+	nlp_e = Euler(N)
+	t_e, x_e, u_e, c_e, px_e, pc_e = jump_solve(nlp_e)
+	plt = direct_plot!(plt, t_e, x_e, u_e, px_e, nlp_e[:scheme], :blue)
+
+	# Trapezoidal
+	nlp_t = Trapezoidal(N)
+	t_t, x_t, u_t, c_t, px_t, pc_t = jump_solve(nlp_t)	
+	plt = direct_plot!(plt, t_t, x_t, u_t, px_t, nlp_t[:scheme], :green)
+	
+end
 
 # ╔═╡ 562ae176-9781-4820-942f-9a3cccf9c732
 begin
@@ -560,6 +1023,8 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Formatting = "59287772-0a20-5a39-b81b-1366585eb4c0"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+Ipopt = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
+JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 OptimalControl = "5f98b655-cc9a-415a-b60e-744165666948"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoTeachingTools = "661c6b06-c737-4d37-b85c-46df65de6f69"
@@ -569,6 +1034,8 @@ PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Formatting = "~0.4.2"
 ForwardDiff = "~0.10.36"
 HypertextLiteral = "~0.9.4"
+Ipopt = "~1.4.2"
+JuMP = "~1.15.1"
 OptimalControl = "~0.7.6"
 Plots = "~1.39.0"
 PlutoTeachingTools = "~0.2.13"
@@ -581,7 +1048,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "caf0bf420e884b93870a6e309817bc7cb10cfcf1"
+project_hash = "6b5d30996cc9310d54317b037b4b9fc584663987"
 
 [[deps.ADNLPModels]]
 deps = ["ColPack", "ForwardDiff", "LinearAlgebra", "NLPModels", "Requires", "ReverseDiff", "SparseArrays"]
@@ -1377,6 +1844,18 @@ deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "6f2675ef130a300a112286de91973805fcc5ffbc"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
 version = "2.1.91+0"
+
+[[deps.JuMP]]
+deps = ["LinearAlgebra", "MacroTools", "MathOptInterface", "MutableArithmetics", "OrderedCollections", "Printf", "SnoopPrecompile", "SparseArrays"]
+git-tree-sha1 = "3700a700bc80856fe673b355123ae4574f2d5dfe"
+uuid = "4076af6c-e467-56ae-b986-b466b2749572"
+version = "1.15.1"
+
+    [deps.JuMP.extensions]
+    JuMPDimensionalDataExt = "DimensionalData"
+
+    [deps.JuMP.weakdeps]
+    DimensionalData = "0703355e-b756-11e9-17c0-8b28908087d0"
 
 [[deps.JuliaInterpreter]]
 deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
@@ -2837,6 +3316,7 @@ version = "1.4.1+1"
 # ╟─13e743c6-0313-44a3-8a88-c64657ee7a34
 # ╟─301e03aa-00e9-47e0-b9ab-f00787bff820
 # ╠═76175aca-885b-4f7a-8883-4b0002297576
+# ╟─e18cc0fa-e1cc-45de-b0ab-b7dadc5d27d6
 # ╟─2bd8abe2-6531-11ee-38f5-5becee44a42f
 # ╠═016e2375-6fc1-4496-a094-0be801dfca17
 # ╟─422e9ce0-1012-47e0-ad03-c4cd3ebbd0ed
@@ -2851,13 +3331,23 @@ version = "1.4.1+1"
 # ╠═f9077dd0-7ae7-49bd-a538-103a571928fc
 # ╠═703868e1-d368-482a-a617-65a1fdef13b2
 # ╠═3a992e9c-1c16-40d9-a76a-2364494a2dda
+# ╠═ece70549-23fb-4683-accc-6f58d2e591bf
 # ╟─b853f0c8-a8b9-4d26-bc41-bf119f50ccd6
 # ╟─8ddb54a9-a197-4f66-a5a0-f4ab01c45564
 # ╟─162f142e-d9ab-4e95-af4d-653e5ec8c975
+# ╟─a84f2989-99dc-4238-b0ab-452fb414239c
+# ╟─dd66e904-468f-44b9-b989-3547e52f072b
+# ╠═20142a45-ccd4-49f3-badb-440b7bd070ec
+# ╟─573cdfec-5330-4d2d-98d2-540c90be9c06
+# ╠═e6394522-03c9-467b-9408-ea1b1eee2b47
+# ╟─6daaa6cc-2937-4a2b-b991-e7bdbc696e4c
+# ╟─c93b4007-b1b5-405d-bd64-f9ea1e0ed906
+# ╟─e90b0d60-bc2f-4d24-af93-178413aae187
 # ╟─d945e217-59e0-4a55-9381-fab63947f0fb
 # ╠═45a81a29-82eb-4280-a965-ae1afe89091f
 # ╟─c33b7143-3736-4067-aca1-19052169765f
-# ╟─74d3eafa-09d7-4187-b4dd-21312f964581
+# ╠═23fb8acf-ab93-4392-9a94-c17ae408eb54
+# ╠═74d3eafa-09d7-4187-b4dd-21312f964581
 # ╟─562ae176-9781-4820-942f-9a3cccf9c732
 # ╟─c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
 # ╟─00000000-0000-0000-0000-000000000001
