@@ -554,6 +554,9 @@ md"## Plots"
 # ╔═╡ c93b4007-b1b5-405d-bd64-f9ea1e0ed906
 @bind N NumberField(1:1000, default=3)
 
+# ╔═╡ 869eeeb3-9948-46b5-97f3-a64b9dbcba9a
+@bind reset_errors_plot_data Button("Reset above errors plot")
+
 # ╔═╡ d945e217-59e0-4a55-9381-fab63947f0fb
 md"# Appendix"
 
@@ -917,14 +920,8 @@ begin
 	xlabel="h", ylabel="|S(p₀)|")
 	plt_errors = plot(plt_error_p0, plt_error_Sp, layout=(1, 2), size=(900, 400), 
 		leftmargin=5mm, bottommargin=5mm)
-	
+
 	# parameters initialization
-	Ns = []
-	hs = []
-	e0s_e = []
-	e0s_t = []
-	eSs_e = []
-	eSs_t = []
 	color_e = :blue
 	color_t = :green
 	
@@ -953,6 +950,17 @@ begin
 	end
 	
 end
+
+# ╔═╡ a9fd9f1c-744b-416f-a77a-a5b3063642d8
+begin 
+	reset_errors_plot_data # just to make this cell reactive
+	Ns = []
+	hs = []
+	e0s_e = []
+	e0s_t = []
+	eSs_e = []
+	eSs_t = []
+end;
 
 # ╔═╡ 4773606a-a488-4925-b5e9-71c3de04d11a
 # ╠═╡ show_logs = false
@@ -3406,13 +3414,15 @@ version = "1.4.1+1"
 # ╟─573cdfec-5330-4d2d-98d2-540c90be9c06
 # ╠═e6394522-03c9-467b-9408-ea1b1eee2b47
 # ╟─6daaa6cc-2937-4a2b-b991-e7bdbc696e4c
-# ╠═c93b4007-b1b5-405d-bd64-f9ea1e0ed906
+# ╟─c93b4007-b1b5-405d-bd64-f9ea1e0ed906
 # ╟─e90b0d60-bc2f-4d24-af93-178413aae187
 # ╟─4773606a-a488-4925-b5e9-71c3de04d11a
+# ╟─869eeeb3-9948-46b5-97f3-a64b9dbcba9a
 # ╟─d945e217-59e0-4a55-9381-fab63947f0fb
 # ╠═45a81a29-82eb-4280-a965-ae1afe89091f
 # ╟─c33b7143-3736-4067-aca1-19052169765f
 # ╟─23fb8acf-ab93-4392-9a94-c17ae408eb54
+# ╠═a9fd9f1c-744b-416f-a77a-a5b3063642d8
 # ╠═74d3eafa-09d7-4187-b4dd-21312f964581
 # ╟─562ae176-9781-4820-942f-9a3cccf9c732
 # ╟─c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
