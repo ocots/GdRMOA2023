@@ -22,8 +22,7 @@ subject to
 
 plus boundary, control and state constraints. We present:
 
-- [an introduction to indirect methods](https://control-toolbox.org/GdRMOA2023/indirect.html)
-- [a brief explanation of the direct method](https://control-toolbox.org/docs/ctdirect/stable/)
+- [an introduction to direct and indirect methods](https://control-toolbox.org/GdRMOA2023/basic.html)
 - the `OptimalControl.jl` package on a [basic example](https://control-toolbox.org/docs/optimalcontrol/stable/tutorial-basic-example.html)
 - a more [advanced example: the Goddard problem](https://control-toolbox.org/docs/optimalcontrol/stable/tutorial-goddard.html), which combines direct and indirect methods.
 
