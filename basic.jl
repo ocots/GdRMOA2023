@@ -22,6 +22,7 @@ begin
 	using HypertextLiteral
 	using Ipopt
 	import JuMP: JuMP
+	using MINPACK # NLE solver
 	using OptimalControl
 	using Plots
 	using Plots.PlotMeasures # for leftmargin, bottommargin
@@ -321,7 +322,14 @@ iterates
 S.(iterates)
 
 # ╔═╡ ece70549-23fb-4683-accc-6f58d2e591bf
-p0_solution = p0
+# ╠═╡ show_logs = false
+# Resolution with Minpack hybrj solver
+begin 
+	nle = (s, ξ) -> s[1] = S(ξ[1])  	# auxiliary function
+	ξ = [ p0 ] 							# initial guess
+	indirect_sol = fsolve(nle, ξ)   	# resolution of S(p0) = 0
+	p0_solution  = indirect_sol.x[1] 	# costate solution
+end
 
 # ╔═╡ b853f0c8-a8b9-4d26-bc41-bf119f50ccd6
 md"""## Plots
@@ -411,40 +419,27 @@ NLP = Direct(OCP, scheme) # scheme is in general a Runge-Kutta scheme
 
 """
 
-# ╔═╡ dd66e904-468f-44b9-b989-3547e52f072b
-md"""## Euler
+# ╔═╡ 3c36b2fa-e27a-471e-8b59-756e06fb2f70
+md"""## Basic example with JuMP
 
-The **Euler scheme** to integrate the Cauchy problem $\dot{x} = f(t, x, u)$, $x(t_0) = x_0$, is given by
+Let us recall the basic example:
 
 ```math
-\left\{
-\begin{array}{l}
-x_{i+1} = x_i + h\, f(t_i, x_i, u_i), \\
-x_0 = x(t_0).
-\end{array}
-\right.
+		\min \frac{1}{2} \int_{t_0}^{t_f} u^2(t) \, \mathrm{d} t \quad \text{with} \quad 
+		\dot{x}(t) = -x(t) + \alpha x^2(t) + u(t), \quad  u(t) \in \mathbb{R}
 ```
 
-!!! note "Basic problem"
-
-	Let us recall the problem:
-	
-	```math
-	        \min \frac{1}{2} \int_{t_0}^{t_f} u^2(t) \, \mathrm{d} t \quad \text{with} \quad 
-	        \dot{x}(t) = -x(t) + \alpha x^2(t) + u(t), \quad  u(t) \in \mathbb{R}
-	```
-	
-	and the limit conditions $x(t_0) = x_0$, $x(t_f) = x_f$, 
-	where $t_0 = 0$, $t_f = 1$, $x_0 = -1$, $x_f = 0$ and $\alpha=1.5$.
+and the limit conditions $x(t_0) = x_0$, $x(t_f) = x_f$, 
+where $t_0 = 0$, $t_f = 1$, $x_0 = -1$, $x_f = 0$ and $\alpha=1.5$.
 
 """
 
-# ╔═╡ 20142a45-ccd4-49f3-badb-440b7bd070ec
-function Euler(N)
+# ╔═╡ 50d5fe4c-cacf-43c8-a5b9-6e4ed46fe7dc
+function basic_jump(N)
 	"""
 		N: size of the grid
 	"""
-
+	
 	# JuMP model with Ipopt solver
 	nlp = JuMP.Model(JuMP.optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 5))
 	
@@ -476,14 +471,41 @@ function Euler(N)
 		con_xf, x[N+1] - xf == 0
 		con_uf, u[N+1] - u[N] == 0
 	end)
+
+	#
+	nlp[:step_length] = h
+
+	return nlp, c, x, u, h
+	
+end;
+
+# ╔═╡ dd66e904-468f-44b9-b989-3547e52f072b
+md"""## Euler
+
+The **Euler scheme** to solve the Cauchy problem $\dot{x} = f(t, x, u)$, $x(t_0) = x_0$, is given by
+
+```math
+\left\{
+\begin{array}{l}
+x_{i+1} = x_i + h\, f(t_i, x_i, u_i), \\
+x_0 = x(t_0).
+\end{array}
+\right.
+```
+
+"""
+
+# ╔═╡ 20142a45-ccd4-49f3-badb-440b7bd070ec
+function Euler(N)
+
+	nlp, c, x, u, h = basic_jump(N)
 	
 	# dynamics with Euler scheme
 	nlp[:dcons] = JuMP.@NLconstraints(nlp, begin
 		con_dc[i=1:N], c[i+1] == c[i] + h * ( u[i]^2 / 2 )
 		con_dx[i=1:N], x[i+1] == x[i] + h * ( -x[i] + α*x[i]^2 + u[i] )
 	end);
-	
-	nlp[:step_length] = h
+
 	nlp[:scheme] = :euler
 
 	return nlp
@@ -507,40 +529,9 @@ x_0 = x(t_0).
 
 # ╔═╡ e6394522-03c9-467b-9408-ea1b1eee2b47
 function Trapezoidal(N)
-	"""
-		N: size of the grid
-	"""
 
-	# JuMP model with Ipopt solver
-	nlp = JuMP.Model(JuMP.optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 5))
-	
-	# options
-	JuMP.set_optimizer_attribute(nlp, "tol", 1e-8)
-	JuMP.set_optimizer_attribute(nlp, "constr_viol_tol", 1e-6)
-	JuMP.set_optimizer_attribute(nlp, "max_iter", 1000)
-	
-	# t0 = 0, tf = 1, x0 = -1, xf = 0, α  = 1.5
-	
-	# parameters
-	c0 = 0.    		# initial cost
-	h  = (tf-t0)/N  # step length
-
-	# variables
-	nlp[:variables] = JuMP.@variables(nlp, begin
-		c[1:N+1] 	# cost
-		x[1:N+1]    # state
-		u[1:N+1]    # control
-	end)
-	
-	# objective function
-	JuMP.@objective(nlp, Min, c[N+1])
-	
-	# initial and final conditions
-	nlp[:cons] = JuMP.@constraints(nlp, begin
-		con_c0, c[1] - c0 == 0
-		con_x0, x[1] - x0 == 0
-		con_xf, x[N+1] - xf == 0
-	end)
+	# 
+	nlp, c, x, u, h = basic_jump(N)
 	
 	# dynamics
 	JuMP.@NLexpression(nlp, dc[i=1:N+1], u[i]^2 / 2)
@@ -552,7 +543,6 @@ function Trapezoidal(N)
 		con_dx[i=1:N], x[i+1] == x[i] + 0.5 * h * ( dx[i] + dx[i+1] )
 	end);
 
-	nlp[:step_length] = h
 	nlp[:scheme] = :trapezoidal
 
 	return nlp
@@ -562,7 +552,7 @@ end;
 md"## Plots"
 
 # ╔═╡ c93b4007-b1b5-405d-bd64-f9ea1e0ed906
-@bind N NumberField(1:1000, default=10)
+@bind N NumberField(1:1000, default=3)
 
 # ╔═╡ d945e217-59e0-4a55-9381-fab63947f0fb
 md"# Appendix"
@@ -847,7 +837,7 @@ begin
 		times = range(t0, tf, length=2) # times for wavefronts
 
 		# plot of the flow
-		plt_flow = plot()
+		plt_flow = plot(legend=:topleft)
 		
 		p0s = 0.1.+range(p0min, p0max, length=20)	# range for the extremals
 		for i ∈ 1:length(p0s)
@@ -858,7 +848,7 @@ begin
 		    plot!(plt_flow, x, p, color=:black, label=label, z_order=:back, linewidth=0.5)
 		end
 
-		if false
+		if true
 			# plot of wavefronts
 			p0s = range(p0min, p0max, length=200)	# range to get points on the wavefronts
 			xs  = zeros(length(p0s), length(times))
@@ -894,7 +884,7 @@ begin
 		plt_control = plot(xlabel="t", ylabel="u")
 
 		# combine
-		plt = plot(plt_flow, plt_control, layout=(1, 2), size=(900, 450), leftmargin=5mm, bottommargin=5mm)
+		plt = plot(plt_flow, plt_control, layout=(1, 2), size=(900, 400), leftmargin=5mm, bottommargin=5mm)
 		
 		#
 		return plt
@@ -909,7 +899,34 @@ begin
 		return plt
 	end
 
+	# 
 	plt_direct = direct_initial_plot(p0_solution)
+
+	#
+	function plot_errors!(plt, Ns, hs, e0s, eSs, scheme, color)
+		I = sortperm(Ns)
+		plot!(plt[1], hs[I], e0s[I], label=string(scheme), color=color, marker=:circle)
+		plot!(plt[2], hs[I], eSs[I], label=string(scheme), color=color, marker=:circle)
+		return plt
+	end
+
+	# initial plot for errors
+	plt_error_p0 = plot(xaxis=:log, yaxis=:log, xlims=(1e-3/2, 2e0), ylims=(1e-7, 1e2), legend=:topleft,
+	xlabel="h", ylabel="|p₀ - p₀⋆| / |p₀⋆|")
+	plt_error_Sp = plot(xaxis=:log, yaxis=:log, xlims=(1e-3/2, 2e0), ylims=(1e-7, 1e2), legend=:topleft,
+	xlabel="h", ylabel="|S(p₀)|")
+	plt_errors = plot(plt_error_p0, plt_error_Sp, layout=(1, 2), size=(900, 400), 
+		leftmargin=5mm, bottommargin=5mm)
+	
+	# parameters initialization
+	Ns = []
+	hs = []
+	e0s_e = []
+	e0s_t = []
+	eSs_e = []
+	eSs_t = []
+	color_e = :blue
+	color_t = :green
 	
 	md"Auxiliary function: direct method"
 end
@@ -918,18 +935,62 @@ end
 # ╠═╡ show_logs = false
 begin 
 
-	#
-	plt = deepcopy(plt_direct)
+	if (N isa Integer) && (N > 0)
+		
+		#
+		plt = deepcopy(plt_direct)
+		
+		# Euler
+		nlp_e = Euler(N)
+		t_e, x_e, u_e, c_e, px_e, pc_e = jump_solve(nlp_e)
+		plt = direct_plot!(plt, t_e, x_e, u_e, px_e, nlp_e[:scheme], color_e)
 	
-	# Euler
-	nlp_e = Euler(N)
-	t_e, x_e, u_e, c_e, px_e, pc_e = jump_solve(nlp_e)
-	plt = direct_plot!(plt, t_e, x_e, u_e, px_e, nlp_e[:scheme], :blue)
+		# Trapezoidal
+		nlp_t = Trapezoidal(N)
+		t_t, x_t, u_t, c_t, px_t, pc_t = jump_solve(nlp_t)	
+		plt = direct_plot!(plt, t_t, x_t, u_t, px_t, nlp_t[:scheme], color_t)
 
-	# Trapezoidal
-	nlp_t = Trapezoidal(N)
-	t_t, x_t, u_t, c_t, px_t, pc_t = jump_solve(nlp_t)	
-	plt = direct_plot!(plt, t_t, x_t, u_t, px_t, nlp_t[:scheme], :green)
+	end
+	
+end
+
+# ╔═╡ 4773606a-a488-4925-b5e9-71c3de04d11a
+# ╠═╡ show_logs = false
+begin
+
+	if (N ∉ Ns) && (N isa Integer) && (N > 0)
+
+		#
+		push!(Ns, N)
+		
+		# step length
+		h = (tf-t0)/N
+		push!(hs, h)
+		
+		# error on initial costate
+		p0_e = px_e[1] # euler
+		push!(e0s_e, abs(p0_e-p0_solution)/abs(p0_solution))
+		
+		#
+		p0_t = px_t[1] # trapezoidal
+		push!(e0s_t, abs(p0_t-p0_solution)/abs(p0_solution))
+
+		# errors on the shooting function
+		push!(eSs_e, abs(S(p0_e)))
+		push!(eSs_t, abs(S(p0_t)))
+
+	end
+
+	if @isdefined nlp_e
+		
+		#
+		plt_errors_current = deepcopy(plt_errors)
+	
+		#
+		plt_errors_current = plot_errors!(plt_errors_current, Ns, hs, e0s_e, eSs_e, nlp_e[:scheme], color_e)
+		plt_errors_current = plot_errors!(plt_errors_current, Ns, hs, e0s_t, eSs_t, nlp_t[:scheme], color_t)
+
+	end
 	
 end
 
@@ -1025,6 +1086,7 @@ ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
 Ipopt = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
+MINPACK = "4854310b-de5a-5eb6-a2a5-c1dee2bd17f9"
 OptimalControl = "5f98b655-cc9a-415a-b60e-744165666948"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoTeachingTools = "661c6b06-c737-4d37-b85c-46df65de6f69"
@@ -1036,6 +1098,7 @@ ForwardDiff = "~0.10.36"
 HypertextLiteral = "~0.9.4"
 Ipopt = "~1.4.2"
 JuMP = "~1.15.1"
+MINPACK = "~1.1.1"
 OptimalControl = "~0.7.6"
 Plots = "~1.39.0"
 PlutoTeachingTools = "~0.2.13"
@@ -1048,7 +1111,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "6b5d30996cc9310d54317b037b4b9fc584663987"
+project_hash = "4a7f92c70588e97584d4137aa76e2dad4003b3c5"
 
 [[deps.ADNLPModels]]
 deps = ["ColPack", "ForwardDiff", "LinearAlgebra", "NLPModels", "Requires", "ReverseDiff", "SparseArrays"]
@@ -3336,17 +3399,20 @@ version = "1.4.1+1"
 # ╟─8ddb54a9-a197-4f66-a5a0-f4ab01c45564
 # ╟─162f142e-d9ab-4e95-af4d-653e5ec8c975
 # ╟─a84f2989-99dc-4238-b0ab-452fb414239c
+# ╟─3c36b2fa-e27a-471e-8b59-756e06fb2f70
+# ╠═50d5fe4c-cacf-43c8-a5b9-6e4ed46fe7dc
 # ╟─dd66e904-468f-44b9-b989-3547e52f072b
 # ╠═20142a45-ccd4-49f3-badb-440b7bd070ec
 # ╟─573cdfec-5330-4d2d-98d2-540c90be9c06
 # ╠═e6394522-03c9-467b-9408-ea1b1eee2b47
 # ╟─6daaa6cc-2937-4a2b-b991-e7bdbc696e4c
-# ╟─c93b4007-b1b5-405d-bd64-f9ea1e0ed906
+# ╠═c93b4007-b1b5-405d-bd64-f9ea1e0ed906
 # ╟─e90b0d60-bc2f-4d24-af93-178413aae187
+# ╟─4773606a-a488-4925-b5e9-71c3de04d11a
 # ╟─d945e217-59e0-4a55-9381-fab63947f0fb
 # ╠═45a81a29-82eb-4280-a965-ae1afe89091f
 # ╟─c33b7143-3736-4067-aca1-19052169765f
-# ╠═23fb8acf-ab93-4392-9a94-c17ae408eb54
+# ╟─23fb8acf-ab93-4392-9a94-c17ae408eb54
 # ╠═74d3eafa-09d7-4187-b4dd-21312f964581
 # ╟─562ae176-9781-4820-942f-9a3cccf9c732
 # ╟─c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
