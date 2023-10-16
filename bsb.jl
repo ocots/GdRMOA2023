@@ -14,14 +14,11 @@ macro bind(def, element)
     end
 end
 
-# ╔═╡ 74d3eafa-09d7-4187-b4dd-21312f964581
-# ╠═╡ show_logs = false
+# ╔═╡ 2072c9de-e01e-4d26-ae33-0cafca0c3ac7
 begin
 	using Formatting
 	using ForwardDiff
 	using HypertextLiteral
-	using Ipopt
-	import JuMP: JuMP
 	using MINPACK # NLE solver
 	using OptimalControl
 	using Plots
@@ -31,978 +28,507 @@ begin
 	md"Needed packages for the presentation."
 end
 
-# ╔═╡ 89d454b5-5077-42a9-9ea9-e44b9a4f0be1
-md"# An introduction to direct and indirect methods
+# ╔═╡ 2ac2c0aa-6c1e-11ee-0737-754127e4118c
+md"# Bang-Singular-Bang case: direct and indirect
 
 Olivier Cots (Univ. Toulouse)
 
 Journées annuelles 2023 du GdR MOA, 18 octobre 2023
 
-**Abstract.** In this tutorial we introduce the indirect shooting method and the direct method on a basic example."
+**Abstract.** In this tutorial we present how to combine direct and indirect methods to solve an optimal control problem with Bang-Singular-Bang optimal structure. The idea is to use the direct method to determine the optimal structure and find an initial guess, respectively to define the shooting function and solve the associated shooting equations."
 
-# ╔═╡ 13e743c6-0313-44a3-8a88-c64657ee7a34
+# ╔═╡ 3cc16521-49ef-464b-ae5a-c76d465c75ad
 html"<button onclick='present()'>Presentation mode: Enter / Leave</button>"
 
-# ╔═╡ 301e03aa-00e9-47e0-b9ab-f00787bff820
-md"# Basic example
+# ╔═╡ a6cd1c83-9a20-4e19-bae3-d2223558d0f8
+md"# Optimal control problem
 
-Let us consider problem which consists in minimising the $L^2$-norm of the control
-
-```math
-        \min \frac{1}{2} \int_{t_0}^{t_f} u^2(t) \, \mathrm{d} t
-```
-
-for the scalar control system
+Let us consider problem which consists in minimising the $L^2$-norm of the state
 
 ```math
-        \dot{x}(t) = -x(t) + \alpha x^2(t) + u(t), \quad  u(t) \in \mathbb{R}
+        \min \frac{1}{2} \int_{0}^{t_f} x^2(t) \, \mathrm{d} t
 ```
 
-and the limit conditions
+for the scalar control system $\dot{x}(t) = f(x(t), u(t)) = u(t)$, with $u(t) \in [-1, 1]$ and the 
+limit conditions $x(0) = 1$, $x(t_f) = 1/2$, where $t_f$ is fixed but not given for the moment.
 
-```math
-        x(t_0) = x_0, \quad x(t_f) = x_f,
-```
+The optimal control law may be discontinuous and composed of **bang arcs** with $u \in \{-1, 1\}$ 
+and **singular arcs** with $u \in (-1, 1)$. To solve this optimal control problem by indirect methods 
+and find the **switching times**, we need to implement shooting function taking into account 
+the optimal structure. We will use the direct method to determine the optimal structure.
 
-where $t_0 = 0$, $t_f = 1$, $x_0 = -1$, $x_f = 0$ and $\alpha=1.5$.
+!!! note 
+
+	To this optimal control problem is associated the stationnary optimization problem
+	
+	```math
+	    \min_{(x, u)} \left\{~ \frac{x^2}{2} ~ | ~  
+		(x, u) \in \mathbb{R} \times [-1, 1],~ f(x,u) = u = 0\right\}.
+	```
+	
+	The static solution is $(x^*, u^*) = (0, 0)$.
+	This problem is what we call a **turnpike** optimal control problem.
+	If the final time $t_f$ is long enough the solution is of the following form: 
+	starting from $x(0)=1$, reach as fast as possible the static solution, stay at the static solution as 
+	long as possible before reaching the target $x(t_f)=1/2$. In this case, the optimal control would be
+	
+	```math
+	    u(t) = \left\{ 
+	    \begin{array}{lll}
+	        -1            & \text{if} & t \in [0, t_1],     \\[0.5em]
+	        \phantom{-}0  & \text{if} & t \in (t_1, t_2],   \\[0.5em]
+	        +1            & \text{if} & t \in (t_2, t_f],
+	    \end{array}
+	    \right. 
+	```
+	
+	with $0 < t_1 < t_2 < t_f$. We say that the control is **Bang-Singular-Bang**.
 "
 
-# ╔═╡ 76175aca-885b-4f7a-8883-4b0002297576
-# we use the OptimalControl.jl package to define the optimal control problem
+# ╔═╡ 83ecdc0e-8a15-4127-abd2-bd254f51b26d
 begin
 	t0 = 0
-	tf = 1
-	x0 = -1
-	xf = 0
-	α  = 1.5
+	x0 = 1
+	xf = 0.5
+end;
+
+# ╔═╡ 2ce6b9cd-74d8-4e92-aff5-82c9a6c61a2d
+# we use the OptimalControl.jl package to define the optimal control problem
+function OCP(tf)
 	@def ocp begin
 	    t ∈ [ t0, tf ], time
 	    x ∈ R, state
 	    u ∈ R, control
+		-1 ≤ u(t) ≤ 1
 	    x(t0) == x0
 	    x(tf) == xf
-	    ẋ(t) == -x(t) + α * x(t)^2 + u(t)
-	    ∫( 0.5u(t)^2 ) → min
+	    ẋ(t) == u(t)
+	    ∫( 0.5x(t)^2 ) → min
 	end
+	return ocp
 end;
 
-# ╔═╡ e18cc0fa-e1cc-45de-b0ab-b7dadc5d27d6
-md"""# Indirect simple shooting
+# ╔═╡ 2c0c3151-3aa8-4684-ba2c-57a3e08799fd
+md"""# Direct method
+## Solve
+"""
 
-➡ Let us consider:
+# ╔═╡ cc07d132-0c67-41bd-b7c1-910207ce573c
+# we use the OptimalControl.jl package to solve the optimal control problem via the direct method
+# the scheme is the Trapezoidal rule
+function direct_solve(ocp, N, tol_convergence, tol_constraints)
+	"""
+		ocp: optimal control problem
+		N: length of the discretization grid
+		tol_convergence: convergence tolerance
+		tol_constraints: tolerance for the constraints
+	"""
+
+	# tol and constr_viol_tol are Ipopt options
+	sol = solve(ocp, grid_size=N, tol=tol_convergence, constr_viol_tol=tol_constraints)
+
+	return sol
+end;
+
+# ╔═╡ 308c507a-c36f-4ff3-991b-f3aa958fba66
+md"""## Plots"""
+
+# ╔═╡ d33b844a-83b2-4d8b-816a-8e36ca084be6
+function direct_plot(sol, tf_lim=nothing)
+
+	tf = sol.times[end]
+
+	if tf_lim === nothing
+		tf_lim = tf
+	end
+	
+	plt = plot(sol, size=(900, 600), 
+		state_style   = (xlims=(t0, tf_lim), ylims=(-0.1, 1.1), linewidth=2, legend=:topright),
+		costate_style = (xlims=(t0, tf_lim), ylims=(-0.6, 0.2), linewidth=2, legend=:topleft),
+		control_style = (xlims=(t0, tf_lim), linetype=:steppost, ylims=(-1.1, 1.1), 
+		linewidth=2, legend=:topleft))
+
+	plot!(plt[1], [0, tf_lim], [xf, xf], label="x=xf", color=:black, z_order=:back)
+	plot!(plt[1], [0, tf_lim], [ 0,  0], label="x=0", color=:black, z_order=:back)
+	plot!(plt[1], [tf, tf], [ -0.1, 1.1], label=false, color=:black, z_order=:back)
+	
+	plot!(plt[2], [0, tf_lim], [ 0,  0], label="p=0", color=:black, z_order=:back)
+	plot!(plt[2], [tf, tf], [ -0.6, 0.2], label=false, color=:black, z_order=:back)
+	
+	plot!(plt[3], [0, tf_lim], [-1, -1], label="u=-1", color=:black, z_order=:back)
+	plot!(plt[3], [0, tf_lim], [+1, +1], label="u=1", color=:black, z_order=:back)
+	plot!(plt[3], [tf, tf], [ -1.1, 1.1], label=false, color=:black, z_order=:back)
+
+	return plt
+	
+end
+
+# ╔═╡ 6e630d12-385d-4f69-abfc-0e8be43a4954
+# ╠═╡ show_logs = false
+# example of resolution
+begin
+
+	tf  = 2 	# we must have tf ≥ 0.5 to make the target reachable
+	N   = 50
+	tol = 1e-8
+
+	ocp = OCP(tf)
+	
+	direct_sol = direct_solve(ocp, N, tol, tol)
+	
+	direct_plot(direct_sol)
+	
+end
+
+# ╔═╡ 2858bfc3-d180-48cd-9780-d2c915e9354a
+md"""## Influence of the options and the final time"""
+
+# ╔═╡ 17d7399d-ef29-423a-bddc-d3b75918bd70
+begin
+
+	tf_lim_influence = 2
+		
+	@htl("""
+	
+	<table style="width:400px">
+	  <tr>
+	    <td>final time</td>
+	    <td>$( @bind tf_influence NumberField(0.5:0.1:tf_lim_influence, default=0.5) )</td>
+	  </tr>
+	  <tr>
+	    <td>time steps</td>
+	    <td>$( @bind N_influence  Slider([1; 10:10:300], default=100) ) </td>
+	  </tr>
+	  <tr>
+	    <td>convergence tolerance</td>
+	    <td>$( @bind tol_influence Slider( -16:1:0, default=-8 ) ) </td>
+	  </tr>
+	</table>
+	""")
+	
+end
+
+# ╔═╡ c0d12757-fa5a-4fc5-b16e-a207583759e9
+# ╠═╡ show_logs = false
+begin
+	ocp_influence = OCP(tf_influence)
+	direct_sol_influence = direct_solve(ocp_influence, N_influence, 10.0^(tol_influence), 10.0^(tol_influence))
+	direct_plot(direct_sol_influence, tf_lim_influence)
+end
+
+# ╔═╡ d06384a8-c332-453a-b324-3ea51bc28788
+begin
+	println("tf  = ", tf_influence)
+	println("N   = ", N_influence)
+	println("tol = ", 10.0^(tol_influence))
+end
+
+# ╔═╡ 92b5f626-a28c-45af-9b3f-1a8b023c913b
+md"""# Structure and initial guess"""
+
+# ╔═╡ 0f4553b1-bb16-4320-8a58-d582ce5111a8
+md"""## Structure
+
+The pseudo-Hamiltonian is (in the normal case):
 
 ```math
-    \mathrm{(OCP)}~
-    \left\{ 
-        \begin{array}{l}
-            \min \displaystyle \int_{0}^{t_f} f^0(x(t),u(t)) \, \mathrm{d} t \\[1.0em]
-            \dot{x}(t) = \displaystyle f(x(t),u(t)), 
-            \quad  u(t) \in \mathbb{R}^m,
-            \quad t \in [0, t_f] \text{ p.p.}, \\[1.0em]
-            x(0) = x_0, \quad x(t_f) = x_f,
-        \end{array}
-    \right.
+H(x, p, u) = -x^2/2 + p\, u.
 ```
 
-where $x_0$, $x_f$ and $t_f>0$ are fixed and we seek $u$ in $L^\infty([0, t_f],\mathbb{R}^m)$.
-
-➡ From Pontryagin's Maximum Principle (PMP), if $(x, u)$ is solution to (OCP) under usual assumptions,
-then, there exists a costate $p(\cdot) \in AC([0, t_f] ,\mathbb{R}^n)$, a scalar $p^0\in \{-1, 0\}$, 
-such that $(p(\cdot), p^0)\ne(0,0)$ and for $t \in [0, t_f]$ a.e.:
+The maximising control is thus given by
 
 ```math
-	\dot{x}(t) =  \nabla_p H(x(t),p(t),u(t)), \quad
-	\dot{p}(t) = -\nabla_x H(x(t),p(t),u(t)),
+	u(t) \left\{ 
+	\begin{array}{lll}
+		= -1        & \text{if} & p(t) < 0,   \\[0.5em]
+		∈ [-1, 1] 	& \text{if} & p(t) = 0,   \\[0.5em]
+		= +1        & \text{if} & p(t) < 0.
+	\end{array}
+	\right. 
 ```
 
-where $H(x,p,u) := ({p}\,|\,{f(x,u)}) + p^0 \, f^0(x,u)$. Moreover, we have the maximisation condition:
+We introduce the **switching function** $\varphi(t) = p(t)$. To retrieve the singular control, we differentiate
+twice the switching function:
 
 ```math
-    H(x(t),p(t),u(t)) = \max_{{w\in U}} H(x(t),p(t),{w}).
+\dot{\varphi}(t) = \dot{p}(t) = x(t) = 0, \quad \ddot{\varphi}(t) = \dot{x}(t) = u(t) = 0.
 ```
 
-➡ Let us assume that for any extremal $(z(\cdot), p^0, u(\cdot))$, with $z=(x, p)$, 
-we can write $u(t) = u(z(t))$, with $z \mapsto u(z)$ at least of class $\mathcal{C}^1$.
-Plugging $u(z)$ into $\vec{H} = (\nabla_p H, -\nabla_x H)$, find a solution to the PMP consists if solving
-the Boundary Value Problem (BVP):
+"""
 
-```math
-    \mathrm{(BVP)}~
-    \left\{ 
-        \begin{aligned}
-            \dot{z}(t) &= \vec{H}(z(t), u(z(t))), \\[0.5em]
-            0_{\mathbb{R}^{2n}} &= (x(0) - x_0, x(t_f) - x_f).
-        \end{aligned}
-    \right.
-```
+# ╔═╡ 751afc3a-4358-497a-ba81-1259b325490b
+function switching(sol)
+	x  = sol.state
+	p  = sol.costate
+	φ  = p # switching function
+	dφ = x
+	return φ, dφ
+end;
 
-This (BVP) can be written as a set of nonlinear equations introducing:
+# ╔═╡ 1077a910-f6f2-45c5-b0fc-f04d22501611
+function structure(sol, η=1e-1)
+	# we assume that the solution is B-SB+ and we just check which arcs are empty
 
-```math
-	\begin{array}{rlll}
-        S \colon    & \mathbb{R}^n    & \longrightarrow   & \mathbb{R}^n \\
-        & p_0     & \longmapsto       & S(p_0) := \pi(z(t_f,x_0,p_0)) - x_f,
-    \end{array}
-```
+	t = sol.times
+	φ, dφ = switching(sol) # switching function
 
-where $\pi(x,p) = x$ and where $z(\cdot,x_0,p_0)$ is the solution of the Cauchy problem
-$\dot{z}(t) = \vec{H}(z(t), u(z(t)))$, $z(0) = (x_0,p_0)$.
+	if all(v->(v<0), φ.(t))  # all is negative bang
+		s = (:neg_bang, )
+	else
+		I = (abs.(φ.(t))  .≤ η)
+		J = (abs.(dφ.(t)) .≤ η)
+		s = isempty(t[ I .& J ]) ? (:neg_bang, :pos_bang) : (:neg_bang, :singular, :pos_bang)
+	end
+	
+	return s
+end
 
-➡ At the end, solving (BVP) is equivalent to solve $S(p_0) = 0$.
-This is what we call the **indirect simple shooting method**.
+# ╔═╡ 6e2f76e2-18f9-484c-8b27-019c1536cd28
+structure(direct_sol)
 
-➡ Summary:
+# ╔═╡ 5d6e0fe2-2e2f-4309-9a44-1dd77b786989
+function switching_plot(sol)
+	φ, dφ = switching(sol)
+	t = sol.times
+	plt_switching = plot([0, tf], [0, 0], color=:black, label=false, 
+		z_order=:back, size=(700, 450), xlims=(0, t[end]), ylims=(-0.5, 1.0))
+	plot!(plt_switching, t, φ, label="φ(t)", xlabel="t", linewidth=2)
+	plot!(plt_switching, t, dφ, label="φ'(t)", xlabel="t", linewidth=2)
+	return plt_switching
+end
+
+# ╔═╡ 083454c1-3fb2-458f-adbf-c5ef5b614e28
+switching_plot(direct_sol)
+
+# ╔═╡ fe3a3331-9da5-4638-8c43-a0bd950e68cd
+md"""## Initial guess
+
+The shooting function will depend on the optimal structure.
 
 ```julia
-BVP = PMP(OCP, u) # u being the maximising control
-S = Shooting(BVP) # return the shooting function
+S(p0) 			# bang
+S(p0, t1)		# bang-singular
+S(p0, t1, t2)	# bang-singular-bang
 ```
+
+Let us find an initial guess of $p_0$, $t_1$ and $t_2$.
 
 """
 
-# ╔═╡ 2bd8abe2-6531-11ee-38f5-5becee44a42f
-md"## Maximising control
+# ╔═╡ c6ebf231-1cf6-48b5-a1fd-fde9379d9def
+structure(direct_sol)
 
-We introduce the pseudo-Hamiltonian
+# ╔═╡ 3e22b580-f0fe-48ae-ba73-89e24b7f7e0f
+function initial_guess(sol, η=1e-1)
 
-```math
-H(x, p, u) = p(-x + \alpha\, x^2 + u) + p^0\, u^2/2, \quad p^0 = -1~\text{(normal case)}.
-```
+	#
+	u  = sol.control
+	p  = sol.costate
+	p0 = p(0) # initial costate
 
-The maximisation condition from the PMP
+	#
+	t = sol.times
+	φ, dφ = switching(sol) 	# switching function
+	s = structure(sol, η)	# structure
 
-```math
-\nabla_u H(x(t), p(t), u(t)) = p(t) - u(t) = 0
-```
+	if s == (:neg_bang, )
+		return p0
+	elseif s == (:neg_bang, :pos_bang)
+		I = φ.(t[2:end]) .* φ.(t[1:end-1]) .≤ 0
+		i = argmax(I)
+		j = i + 1
+		ti = t[i]
+		tj = t[j]
+		φi = φ(ti)
+		φj = φ(tj)
+		u = φi # min
+		v = φj # max
+		c = 0
+		λ = (v-c)/(c-u)
+		t1 = (tj+λ*ti)/(1+λ)
+		return p0, t1
+	else
+		singular_times = t[ abs.(u.(t)) .≤ 1-η ]
+		t1 = min(singular_times... )
+		t2 = max(singular_times... )
+		return p0, t1, t2
+	end
+	
+end
 
-leads to the definition of the **maximising control** in feedback form
+# ╔═╡ febf637a-2a2e-430d-9cb6-8bbdf1f93c31
+ξ_guess = initial_guess(direct_sol)
 
-```math
-u(x, p) = p
-```
+# ╔═╡ e54fbb62-1b8c-4862-9205-afe31d0d8203
+function guess_plot(sol, ξ)
 
-since $\partial_{uu}H = -1 < 0$.
-"
+	#
+	t = sol.times
+	φ, dφ = switching(sol) 	# switching function
+	
+	#
+	plt = switching_plot(sol)
 
-# ╔═╡ 016e2375-6fc1-4496-a094-0be801dfca17
-u(x, p) = p;
+	#
+	yl = ylims(plt)
 
-# ╔═╡ 422e9ce0-1012-47e0-ad03-c4cd3ebbd0ed
-md"""## Boundary value problem
+	# times
+#	for x ∈ t
+#		plot!(plt, [x, x], [yl[1], yl[2]], color=:black, label=false, z_order=:back, linewidth=0.5)
+#	end
+	
+	if (length(ξ) ≥ 2)
+		#
+		t1 = ξ[2]
+		plot!(plt, [t1, t1], [yl[1], yl[2]], color=:black, label="t=t₁", z_order=:back)
+		#
+		if false
+			I = (t[2:end].-t1) .* (t[1:end-1].-t1) .≤ 0
+			i = argmax(I)
+			j = i + 1
+			X = [t[i], t[j], t[j], t[i], t[i]]
+			Y = [φ(t[i]), φ(t[i]), φ(t[j]), φ(t[j]), φ(t[i])]
+			plot!(plt, X, Y, color=:black, label=false, z_order=:back)
+		end
+	end
+	
+	if (length(ξ) ≥ 3)
+		plot!(plt, [ξ[3], ξ[3]], [yl[1], yl[2]], color=:black, label="t=t₂", z_order=:back)
+	end
+	
+	return plt
+end
 
-Plugging the maximising control into the pseudo-Hamiltonian vector field
+# ╔═╡ da6de238-f061-4579-b958-bf075df80ac8
+guess_plot(direct_sol, ξ_guess)
 
-```math
-	\dot{x}(t) =  \nabla_p H(x(t), p(t), u(t)), \quad 
-	\dot{p}(t) = -\nabla_x H(x(t), p(t), u(t))
-```
+# ╔═╡ 1cda827b-e242-4627-a7ce-e0c12c58c952
+md"""# Indirect method
 
-and considering the limit conditions $x(0)=x_0$, $x(t_f)=x_f$,
-leads to the definition of the Boundary Value Problem (BVP)
-
-```math
-    \mathrm{(BVP)}~\left\{ 
-        \begin{array}{l}
-            \dot{x}(t)  = \phantom{-} \nabla_p H[t] = -x(t) + \alpha x^2(t) + u(x(t), p(t)) 
-            = -x(t) + \alpha x^2(t) + p(t), \\[0.5em]
-            \dot{p}(t)  = -           \nabla_x H[t] = (1 - 2 \alpha x(t))\, p(t),    \\[0.5em]
-            x(t_0)        = x_0, \quad x(t_f) = x_f,
-        \end{array}
-    \right.
-```
-
-where $[t] =  (x(t),p(t),u(x(t), p(t)))$.
-
-!!! note "Nota bene"
-
-    Our goal is to solve this (BVP). Solving (BVP) consists in solving the PMP which provides 
-	necessary conditions of optimality. 
+## Flows
 """
 
-# ╔═╡ 6784a1c0-1f8b-4e6c-8bf4-1260ddfee22f
-md"""## Hamiltonian vector field
+# ╔═╡ ee4f1730-1c40-453d-a144-0fb90b0a8d62
+begin
+	
+	u_neg = -1
+	u_pos =  1
+	u_sin =  0
+	
+	f_neg = Flow(ocp, (x, p) -> u_neg)
+	f_pos = Flow(ocp, (x, p) -> u_pos)
+	f_sin = Flow(ocp, (x, p) -> u_sin)
+	
+end;
 
-To achive our goal, that is to solve the (BVP), let us first introduce the pseudo-Hamiltonian 
-vector field notation
+# ╔═╡ 49a39713-6212-46cf-8d8e-d27bdc7f015d
+md"""## Shooting function"""
 
-```math
-    \vec{H}(z,u) = \left( \nabla_p H(z,u), -\nabla_x H(z,u) \right), \quad z = (x,p),
-```
-
-and then denote by $\varphi_{t_0, x_0, p_0}(\cdot)$ the solution of the Cauchy problem
-
-```math
-\dot{z}(t) = \vec{H}(z(t), u(z(t))), \quad z(t_0) = (x_0, p_0).
-```
-
-Our goal becomes to solve
-
-```math
-\pi( \varphi_{t_0, x_0, p_0}(t_f) ) = x_f, \quad \pi(x, p) = x.
-```
-
-!!! note "Nota bene"
-
-    Actually, $\varphi_{t_0, x_0, p_0}(\cdot)$ is also solution of
-    
-    ```math
-        \dot{z}(t) = \vec{\mathbf{H}}(z(t)), \quad z(t_0) = (x_0, p_0),
-    ```
-    where $\mathbf{H}(z) = H(z, u(z))$ and $\vec{\mathbf{H}} = (\nabla_p \mathbf{H}, -\nabla_x \mathbf{H})$. This is what is actually computed by `Flow` below.
-
-To compute $\varphi$ with the `OptimalControl` package, we define the flow of the associated Hamiltonian vector field by:
-
-"""
-
-# ╔═╡ 17b04d51-f8db-44e9-863b-de6a75cc3327
-φ = Flow(ocp, u); # flow from the optimal control problem ocp and maximising control u
-
-# ╔═╡ 49b0fa4c-11fe-4b4e-ba13-caa7a172aa20
-# ╠═╡ show_logs = false
-φ(t0, x0, 0.5, tf) # p0 = 0.5
-
-# ╔═╡ 7466eab0-85c7-43c9-bbfb-419d888571e3
-md"""## Shooting method
-
-Now, we are in position to define mathematically the equation we have to solve in order to solve (BVP).
-
-We introduce the **shooting function**.
-
-```math
-    \begin{array}{rlll}
-        S \colon    & \mathbb{R}    & \longrightarrow   & \mathbb{R} \\
-                    & p_0    & \longmapsto     & S(p_0) = \pi( \varphi_{t_0, x_0, p_0}(t_f) ) - x_f.
-    \end{array}
-```
-
-At the end, solving (BVP) is equivalent to solve $S(p_0) = 0$.
-This is what we call the **indirect simple shooting method**.
-"""
-
-# ╔═╡ 9b530a46-1f8d-43f5-9e30-167d35c245f9
+# ╔═╡ 8be85df8-7eb4-42f3-acc8-b482f138dde0
 # definition of the state projection
 begin
 	π(x, p) = x
 	π(z::Tuple{Number, Number}) = π(z...) # z = (x, p)
 end;
 
-# ╔═╡ ee4d6d59-2965-4233-b991-3778e06fd233
-# shooting function
-S(p0) = π( φ(t0, x0, p0, tf) ) - xf;
+# ╔═╡ 4dc3e568-4c2d-4a8a-bcd1-8bbffc9cbb54
+# bang case
+S(p0) = π( f_neg(t0, x0, p0, tf) ) - xf
 
-# ╔═╡ 633515a6-0d41-4c80-be2f-0be8f8d5ec3e
-md"""**Newton solver.** Let us recall the basics of the Newton method. 
+# ╔═╡ 6251fa19-88d9-4f71-bfef-8bbec03f7d13
+# bang-bang case
+function S(p0, t1)
 
-The Newton iteration is $p_0^{(k+1)} = p_0^{(k)} + d^{(k)},$
-with $d^{(k)}$ the solution of the linear system $J_S(p_0^{(k)}) \cdot d = - S(p_0^{(k)}).$
+    x1,  p1 = f_neg(t0, x0, p0, t1)  # first arc:  u = -1
+    xf_, pf = f_pos(t1, x1, p1, tf)	 # second arc: u =  1
 
-"""
+	s1 = p1 			# switching at time t1
+	s2 = xf_ - xf 		# reach the target
 
-# ╔═╡ 2f07ceb7-1133-48f8-b807-b14fbdf50754
-Jₛ(p0) = ForwardDiff.jacobian(x -> [S(x[1])], [p0])[1, 1];
+	return s1, s2
+end
 
-# ╔═╡ f9077dd0-7ae7-49bd-a538-103a571928fc
+# ╔═╡ 403950a5-df02-407c-a32a-cc1a1603d17e
+# bang-singular-bang case
+function S(p0, t1, t2)
+
+    x1,  p1 = f_neg(t0, x0, p0, t1)  # first arc:  u = -1
+    x2,  p2 = f_sin(t1, x1, p1, t2)	 # second arc: u =  0
+	xf_, pf = f_pos(t2, x2, p2, tf)	 # third arc:  u =  1
+
+	s1 = p1 			# reaching singular surface at time t1: φ(t1) = p(t1) = 0
+	s2 = x1 			# reaching singular surface at time t1: φ'(t1) = x(t1) = 0
+	s3 = xf_ - xf 		# reach the target
+
+	return s1, s2, s3
+end
+
+# ╔═╡ ff04a5a6-1062-4a98-a86d-602a5de2ce20
+md"""## Solve"""
+
+# ╔═╡ 2cf6277c-8add-4693-ad80-5d8a1fa29aa1
 # ╠═╡ show_logs = false
 begin
-	p0 = 1.5 					# initial costate for the Newton solver
-	iterates = [p0] 			# list of iterates
-	iterations = 5 				# number of iterations
-	for i ∈ 1:iterations
-		d  = - Jₛ(p0) \ S(p0) 	# Newton direction
-		p0 = p0 + d 			# update
-		push!(iterates, p0)		# save
+	
+	nle = (s, ξ) -> s[:] .= S(ξ...)  # auxiliary function with aggregated inputs
+	
+	ξ = [ ξ_guess... ]            	 # initial guess: from tuple to vector
+	
+	nle_sol = fsolve(nle, ξ) 	 	 # resolution of S(ξ) = 0 with MINPACK hybrj solver
+
+end
+
+# ╔═╡ 065db00d-342a-4010-be15-4be4cd9ff005
+p0_solution, switching_times_solution = nle_sol.x[1], nle_sol.x[2:end]
+
+# ╔═╡ b5ef6acc-6374-493f-ad02-407a3a84c5bb
+md"""## Plots"""
+
+# ╔═╡ a08cd686-cb73-4657-887f-d2c08fda6932
+# concatenation of flows
+begin
+	# bang case
+	function OptimalFlow()
+		return f_neg
 	end
-end
+	
+	# bang-bang case
+	function OptimalFlow(t1)
+		return f_neg * (t1, f_pos)
+	end
+	
+	# bang-singular-bang case
+	function OptimalFlow(t1, t2)
+		return f_neg * (t1, f_sin) * (t2, f_pos)
+	end
+	
+end;
 
-# ╔═╡ 703868e1-d368-482a-a617-65a1fdef13b2
-iterates
+# ╔═╡ aa29362f-9ed2-4c79-aef6-ca8d4c28dc99
+flow_sol = OptimalFlow(switching_times_solution...);
 
-# ╔═╡ 3a992e9c-1c16-40d9-a76a-2364494a2dda
+# ╔═╡ af90fd52-c990-4dab-8697-a672e41851d3
 # ╠═╡ show_logs = false
-S.(iterates)
+indirect_sol = flow_sol((t0, tf), x0, p0_solution);
 
-# ╔═╡ ece70549-23fb-4683-accc-6f58d2e591bf
-# ╠═╡ show_logs = false
-# Resolution with Minpack hybrj solver
-begin 
-	nle = (s, ξ) -> s[1] = S(ξ[1])  	# auxiliary function
-	ξ = [ p0 ] 							# initial guess
-	indirect_sol = fsolve(nle, ξ)   	# resolution of S(p0) = 0
-	p0_solution  = indirect_sol.x[1] 	# costate solution
+# ╔═╡ f5acfa12-4e9c-417e-bbbc-8f819ef195b9
+begin
+
+	final_plt = direct_plot(direct_sol)
+	plot!(final_plt, indirect_sol, 
+		state_style=(color=:red, label="x: indirect"),
+		costate_style=(color=:red, label="p: indirect"),
+		control_style=(color=:red, label="u: indirect"))
+	
 end
 
-# ╔═╡ b853f0c8-a8b9-4d26-bc41-bf119f50ccd6
-md"""## Plots
-
-"""
-
-# ╔═╡ 8ddb54a9-a197-4f66-a5a0-f4ab01c45564
-begin 
-	zoom_min = 0
-	zoom_max = 4
-	md"""
-	Current iterate: $(@bind idx NumberField(-1:length(iterates)-1, default=0))
-	
-	Zoom in / out: $( @bind zoom Slider( zoom_min:0.1:zoom_max, default=zoom_min ) )
-	"""
-end
-
-# ╔═╡ a84f2989-99dc-4238-b0ab-452fb414239c
-md"""# Direct method
-
-Let consider a Mayer problem (for the presentation):
-
-```math
-\min\, g(x(t_0), x(t_f))
-```
-
-where the state $x$ and the control $u$ are functions subject, for $t \in [t_0, t_f]$,
-to the differential constraint
-
-```math
-   \dot{x}(t) = f(t, x(t), u(t))
-```
-
-and other constraints such as
-
-```math
-\begin{array}{llcll}
-~\xi_l  &\le& \xi(t, u(t))        &\le& \xi_u, \\
-\eta_l &\le& \eta(t, x(t))       &\le& \eta_u, \\
-\psi_l &\le& \psi(t, x(t), u(t)) &\le& \psi_u, \\
-\phi_l &\le& \phi(t_0, x(t_0), t_f, x(t_f)) &\le& \phi_u.
-\end{array}
-```
-
-The so-called direct approach transforms the infinite dimensional optimal control problem (OCP) into a 
-finite dimensional optimization problem (NLP). This is done by a discretization in time by Runge-Kutta 
-methods applied to the state and control variables, as well as the dynamics equation. These methods
-are usually less precise than indirect methods based on Pontryagin’s Maximum Principle, 
-but more robust with respect to the initialization. Also, they are more straightforward to apply, 
-hence their wide use in industrial applications.
-
-Example of the time discretization by the trapezoidal rule:
-
-```math
-\begin{array}{lcl}
-t \in [t_0,t_f]   & \to & \{t_0, \ldots, t_N=t_f\}\\[0.2em]
-x(\cdot),\, u(\cdot) & \to & X=\{x_0, \ldots, x_N, u_0, \ldots, u_N\} \\[1em]
-\hline
-\\
-\text{step} & \to & h = (t_f-t_0)/N\\[0.2em]
-\text{criterion} & \to & \min\ g(x_0, x_N) \\[0.2em]
-\text{dynamics}  & \to & x_{i+i} = x_i + (h/2)\, (f(t_i, x_i, u_i) + f(t_{i+1}, x_{i+1}, u_{i+1})) \\[0.2em]
-\text{control constraints} &\to& \xi_l  \le  \xi(t_i, u_i)   \le \xi_u \\[0.2em]
-\text{path constraints} &\to& \eta_l \le \eta(t_i, x_i)        \le \eta_u \\[0.2em]
-\text{mixed constraints} &\to& \psi_l \le \psi(t_i, x_i, u_i) \le \psi_u \\[0.2em]
-\text{limit conditions} &\to& \phi_l \le \phi(x_0, x_N) \le \phi_u
-\end{array}
-```
-
-We therefore obtain a nonlinear programming problem on the discretized state and control variables of the 
-general form:
-
-```math
-\mathrm{(NLP)}~ \left\{
-\begin{array}{lr}
-\min \ F(X) \\
-LB \le C(X) \le UB
-\end{array}
-\right.
-```
-
-Summary:
-
-```julia
-NLP = Direct(OCP, scheme) # scheme is in general a Runge-Kutta scheme
-```
-
-"""
-
-# ╔═╡ 3c36b2fa-e27a-471e-8b59-756e06fb2f70
-md"""## Basic example with JuMP
-
-Let us recall the basic example:
-
-```math
-		\min \frac{1}{2} \int_{t_0}^{t_f} u^2(t) \, \mathrm{d} t \quad \text{with} \quad 
-		\dot{x}(t) = -x(t) + \alpha x^2(t) + u(t), \quad  u(t) \in \mathbb{R}
-```
-
-and the limit conditions $x(t_0) = x_0$, $x(t_f) = x_f$, 
-where $t_0 = 0$, $t_f = 1$, $x_0 = -1$, $x_f = 0$ and $\alpha=1.5$.
-
-"""
-
-# ╔═╡ 50d5fe4c-cacf-43c8-a5b9-6e4ed46fe7dc
-function basic_jump(N)
-	"""
-		N: size of the grid
-	"""
-	
-	# JuMP model with Ipopt solver
-	nlp = JuMP.Model(JuMP.optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 5))
-	
-	# options
-	JuMP.set_optimizer_attribute(nlp, "tol", 1e-8)
-	JuMP.set_optimizer_attribute(nlp, "constr_viol_tol", 1e-6)
-	JuMP.set_optimizer_attribute(nlp, "max_iter", 1000)
-	
-	# t0 = 0, tf = 1, x0 = -1, xf = 0, α  = 1.5
-	
-	# parameters
-	c0 = 0.    		# initial cost
-	h  = (tf-t0)/N  # step length
-
-	# variables
-	nlp[:variables] = JuMP.@variables(nlp, begin
-		c[1:N+1] 	# cost
-		x[1:N+1]    # state
-		u[1:N+1]    # control
-	end)
-	
-	# objective function
-	JuMP.@objective(nlp, Min, c[N+1])
-	
-	# initial and final conditions
-	nlp[:cons] = JuMP.@constraints(nlp, begin
-		con_c0, c[1] - c0 == 0
-		con_x0, x[1] - x0 == 0
-		con_xf, x[N+1] - xf == 0
-		con_uf, u[N+1] - u[N] == 0
-	end)
-
-	#
-	nlp[:step_length] = h
-
-	return nlp, c, x, u, h
-	
-end;
-
-# ╔═╡ dd66e904-468f-44b9-b989-3547e52f072b
-md"""## Euler
-
-The **Euler scheme** to solve the Cauchy problem $\dot{x} = f(t, x, u)$, $x(t_0) = x_0$, is given by
-
-```math
-\left\{
-\begin{array}{l}
-x_{i+1} = x_i + h\, f(t_i, x_i, u_i), \\
-x_0 = x(t_0).
-\end{array}
-\right.
-```
-
-"""
-
-# ╔═╡ 20142a45-ccd4-49f3-badb-440b7bd070ec
-function Euler(N)
-
-	nlp, c, x, u, h = basic_jump(N)
-	
-	# dynamics with Euler scheme
-	nlp[:dcons] = JuMP.@NLconstraints(nlp, begin
-		con_dc[i=1:N], c[i+1] == c[i] + h * ( u[i]^2 / 2 )
-		con_dx[i=1:N], x[i+1] == x[i] + h * ( -x[i] + α*x[i]^2 + u[i] )
-	end);
-
-	nlp[:scheme] = :euler
-
-	return nlp
-end;
-
-# ╔═╡ 573cdfec-5330-4d2d-98d2-540c90be9c06
-md"""## Trapezoidal rule
-
-The **Trapezoidal rule** to integrate the Cauchy problem $\dot{x} = f(t, x, u)$, $x(t_0) = x_0$, is given by
-
-```math
-\left\{
-\begin{array}{l}
-\displaystyle x_{i+1} = x_i + \frac{h}{2}\, \big(f(t_i, x_i, u_i) + f(t_{i+1}, x_{i+1}, u_{i+1})\big) \\[0.2em]
-x_0 = x(t_0).
-\end{array}
-\right.
-```
-
-"""
-
-# ╔═╡ e6394522-03c9-467b-9408-ea1b1eee2b47
-function Trapezoidal(N)
-
-	# 
-	nlp, c, x, u, h = basic_jump(N)
-	
-	# dynamics
-	JuMP.@NLexpression(nlp, dc[i=1:N+1], u[i]^2 / 2)
-    JuMP.@NLexpression(nlp, dx[i=1:N+1], -x[i] + α*x[i]^2 + u[i])
-
-	# Trapezoidal scheme
-	nlp[:dcons] = JuMP.@NLconstraints(nlp, begin
-		con_dc[i=1:N], c[i+1] == c[i] + 0.5 * h * ( dc[i] + dc[i+1] )
-		con_dx[i=1:N], x[i+1] == x[i] + 0.5 * h * ( dx[i] + dx[i+1] )
-	end);
-
-	nlp[:scheme] = :trapezoidal
-
-	return nlp
-end;
-
-# ╔═╡ 6daaa6cc-2937-4a2b-b991-e7bdbc696e4c
-md"## Plots"
-
-# ╔═╡ c93b4007-b1b5-405d-bd64-f9ea1e0ed906
-@bind N NumberField(1:1000, default=3)
-
-# ╔═╡ 869eeeb3-9948-46b5-97f3-a64b9dbcba9a
-@bind reset_errors_plot_data Button("Reset above errors plot")
-
-# ╔═╡ d945e217-59e0-4a55-9381-fab63947f0fb
+# ╔═╡ 098f20a5-cc3e-476d-9ae5-560eab08d7d7
 md"# Appendix"
 
-# ╔═╡ 45a81a29-82eb-4280-a965-ae1afe89091f
+# ╔═╡ 64dbd6b2-af29-4cc5-95d6-455bb67df0b5
 TableOfContents(depth=2)
 
-# ╔═╡ c33b7143-3736-4067-aca1-19052169765f
-# ╠═╡ show_logs = false
-begin
-	# exponential mapping
-	exp(p0; saveat=[]) = φ((t0, tf), x0, p0, saveat=saveat).ode_sol
-
-	# limits
-	p0min = -0.5
-	p0max = 2
-	
-	# initial plots
-	function initial_plots(p0_sol)
-		
-		times = range(t0, tf, length=2) # times for wavefronts
-
-		# plot of the flow
-		plt_flow = plot()
-		
-		p0s = 0.1.+range(p0min, p0max, length=20)	# range for the extremals
-		for i ∈ 1:length(p0s)
-		    sol = exp(p0s[i])
-		    x = [sol(t)[1] for t ∈ sol.t]
-		    p = [sol(t)[2] for t ∈ sol.t]
-		    label = i==1 ? "extremals" : false
-		    plot!(plt_flow, x, p, color=:blue, label=label, z_order=:back)
-		end
-
-		# plot of wavefronts
-		p0s = range(p0min, p0max, length=200)	# range to get points on the wavefronts
-		xs  = zeros(length(p0s), length(times))
-		ps  = zeros(length(p0s), length(times))
-		for i ∈ 1:length(p0s)	# get points on the wavefronts
-		    sol = exp(p0s[i], saveat=times)
-		    xs[i, :] = [z[1] for z ∈ sol.(times)]
-		    ps[i, :] = [z[2] for z ∈ sol.(times)]
-		end
-		
-		for j ∈ 1:length(times) # plot the wavefronts
-		    label = j==1 ? "flow at times" : false
-		    plot!(plt_flow, xs[:, j], ps[:, j], color=:green, linewidth=2, label=label, z_order=:front)
-		end
-		plot!(plt_flow, xlims = (-1.1, 1), ylims =  (p0min, p0max))
-		plot!(plt_flow, [0, 0], [p0min, p0max], color=:black, 
-			xlabel="x", ylabel="p", label="x=xf", z_order=:back)
-		plot!(plt_flow, formatter = x -> format(x, precision=2))
-
-		# plot the solution
-		sol = exp(p0_sol)
-		x = [sol(t)[1] for t ∈ sol.t]
-		p = [sol(t)[2] for t ∈ sol.t]
-		
-		plot!(plt_flow, x, p, color=:red, linestyle=:dash, linewidth=0.5, 
-			label="extremal solution", z_order=:back)
-		plot!(plt_flow, [x[end]], [p[end]], seriestype=:scatter, 
-			markersize=5, markerstrokewidth=0.5, color=:green, label=false, z_order=:front)
-
-		# plot the shooting function with the solution
-		plt_shoot = plot(xlims=(p0min, p0max), ylims=(-2, 4), xlabel="p₀", ylabel="y")
-		
-		p0s = range(p0min, p0max, length=500)
-		plot!(plt_shoot, p0s, S, linewidth=2, label="S(p₀)", color=:green, z_order=:front)
-		
-		plot!(plt_shoot, [p0min, p0max], [0, 0], color=:black, label="y=0", z_order=:back)
-		plot!(plt_shoot, [p0_sol, p0_sol], [-2, 0], color=:black, 
-			label="p₀ solution", linestyle=:dash, z_order=:back)
-		plot!(plt_shoot, [p0_sol], [0], seriestype=:scatter, 
-			markersize=5, markerstrokewidth=0.5, color=:green, label=false, z_order=:front)
-		plot!(plt_shoot, formatter = x -> format(x, precision=4))
-
-		return plt_flow, plt_shoot
-	end
-	
-	function plot_extremal!(plt, p0, lw) # add an extremal to a plot
-		sol = exp(p0)
-		x = [sol(t)[1] for t ∈ sol.t]
-		p = [sol(t)[2] for t ∈ sol.t]
-		plot!(plt, x, p, color=:red, label=false, linewidth=lw)
-		return plt
-	end
-	
-	function plot_extremals!(plt, p0s, idx) # add some extremals to a plot
-		idx = idx + 1
-		lw_min = 0.5
-		lw_max = 2
-		N = length(p0s)
-		lws = range(lw_min, lw_max, N)
-		@assert 0 ≤ idx ≤ N
-		for i = 1:idx
-			plot_extremal!(plt, p0s[i], lws[i+N-idx])
-		end
-		return plt
-	end
-
-	T(p0, d) = S(p0) + Jₛ(p0) * d # tangent equation
-	
-	function plot_iterates!(plt, p0s, idx)
-
-		# styles
-		x_style = (color=:red, seriestype=:scatter, markerstrokewidth=0.5, label="", z_order=:front)
-		y_style = (color=:blue, seriestype=:scatter, 
-			markersize=3, markerstrokewidth=0, label="", z_order=:front)
-		a_style = (color=:black, linestyle=:dash, label="")
-    	T_style = (color=:blue, z_order=:back, label="")
-		
-		#
-		idx = idx + 1
-		ms_min = 1
-		ms_max = 5
-		N = length(p0s)
-		mss = range(ms_min, ms_max, N)
-		@assert 0 ≤ idx ≤ N
-		for i = 1:idx
-			plot!(plt, [p0s[i], p0s[i]], [0, S(p0s[i])]; a_style...)
-			plot!(plt, [p0s[i]], [0]; markersize=mss[i+N-idx], x_style...)
-		end
-	
-		a = p0min
-		b = p0max
-		if 2 ≤ idx ≤ N-1 # plot the tangent
-			x = p0s[idx-1]
-			plot!(plt, [x], [S(x)]; y_style...)
-			plot!(plt, [a, b], [T(x, a-x), T(x, b-x)]; T_style...) # tangente
-		end
-		if 1 ≤ idx ≤ N
-			x = p0s[idx]
-			plot!(plt, [x], [S(x)]; y_style...)
-		end
-		
-		return plt
-	end
-
-	function make_zoom(plt_flow, plt_shoot, zoom)
-		# ref limits
-		x1_ref = p0min; x2_ref = p0max; y1_ref = -2 ; y2_ref = 4
-		
-		# ref solution 
-		xc = p0; yc = 0
-		
-		# new limits
-		x1_new = xc - (xc - x1_ref) / 10^(zoom)
-		x2_new = xc - (xc - x2_ref) / 10^(zoom)
-		y1_new = yc - (yc - y1_ref) / 10^(zoom)
-		y2_new = yc - (yc - y2_ref) / 10^(zoom)
-		
-		# limits to center the solution
-		Δx = x2_new - x1_new
-		Δy = y2_new - y1_new
-		a = zoom_min
-		b = zoom_max
-		
-		# combination of original centering and final one when zoom is max
-		x1_new = (b-zoom)/(b-a) * x1_new + (zoom-a)/(b-a) * (xc - Δx/2)
-		x2_new = (b-zoom)/(b-a) * x2_new + (zoom-a)/(b-a) * (xc + Δx/2)
-		y1_new = (b-zoom)/(b-a) * y1_new + (zoom-a)/(b-a) * (yc - Δy/2)
-		y2_new = (b-zoom)/(b-a) * y2_new + (zoom-a)/(b-a) * (yc + Δy/2)
-		
-		# update
-		plot!(plt_shoot, xlims=(x1_new, x2_new), ylims=(y1_new, y2_new))
-
-		# for the extremals
-		x1_deb = -1.1; x2_deb = 1.0; y1_deb = p0min; y2_deb = p0max
-		x1_fin = -1.1; x2_fin = 0.1; y1_fin = 0.000; y2_fin = 0.700
-		x1_new = (b-zoom)/(b-a) * x1_deb + (zoom-a)/(b-a) * x1_fin
-		x2_new = (b-zoom)/(b-a) * x2_deb + (zoom-a)/(b-a) * x2_fin
-		y1_new = (b-zoom)/(b-a) * y1_deb + (zoom-a)/(b-a) * y1_fin
-		y2_new = (b-zoom)/(b-a) * y2_deb + (zoom-a)/(b-a) * y2_fin
-		
-		# update
-		plot!(plt_flow, xlims=(x1_new, x2_new), ylims=(y1_new, y2_new))
-		
-		return plt_flow, plt_shoot
-	end
-
-	plt_flow, plt_shoot = initial_plots(p0); # initial plots
-
-	md"Auxiliary functions: indirect shooting"
-end
-
-# ╔═╡ 162f142e-d9ab-4e95-af4d-653e5ec8c975
-# ╠═╡ show_logs = false
-begin 
-	# copy the plt_flow
-	plt_flow_copy = deepcopy(plt_flow)
-	plt_shoot_copy = deepcopy(plt_shoot)
-
-	# add extremals
-	if idx ≥ 0
-		plot_extremals!(plt_flow_copy, iterates, idx)
-	end
-
-	# add iterates on the plot of shooting function
-	if idx ≥ 0
-		plot_iterates!(plt_shoot_copy, iterates, idx)
-	end
-
-	# limits and zoom
-	make_zoom(plt_flow_copy, plt_shoot_copy, zoom)
-
-	# plot all
-	plot(plt_flow_copy, plt_shoot_copy, layout=(1,2), size=(900, 450), 
-		leftmargin=5mm, bottommargin=5mm)
-end
-
-# ╔═╡ 23fb8acf-ab93-4392-9a94-c17ae408eb54
-# ╠═╡ show_logs = false
-begin
-	
-	function jump_solve(nlp)
-	
-		# Solve for the control and state
-		println("Solving...")
-		JuMP.optimize!(nlp)
-		println()
-		
-		# Display results
-		if JuMP.termination_status(nlp) == JuMP.MOI.OPTIMAL
-		    println("  Solution is optimal")
-		elseif  JuMP.termination_status(nlp) == JuMP.MOI.LOCALLY_SOLVED
-		    println("  (Local) solution found")
-		elseif JuMP.termination_status(nlp) == JuMP.MOI.TIME_LIMIT && has_values(nlp)
-		    println("  Solution is suboptimal due to a time limit, but a primal solution is available")
-		else
-		    error("  The model was not solved correctly.")
-		end
-		println("  objective value = ", JuMP.objective_value(nlp))
-		println()
-		
-		# Retrieves values (including duals)
-		c  = JuMP.value.(nlp[:variables][1])[:]
-		x  = JuMP.value.(nlp[:variables][2])[:]
-		u  = JuMP.value.(nlp[:variables][3])[:]
-		N  = length(c)-1
-		t  = (0:N) * nlp[:step_length]
-		
-		#
-		con_c0 = nlp[:cons][1]
-		con_x0 = nlp[:cons][2]
-		con_xf = nlp[:cons][3]
-		#
-		pc0 = JuMP.dual(con_c0)
-		px0 = JuMP.dual(con_x0)
-		pxf = JuMP.dual(con_xf)
-	
-		#
-		con_dc = nlp[:dcons][1]
-		con_dx = nlp[:dcons][2]
-			
-		if(pc0*JuMP.dual(con_dc[1])<0); pc0 = -pc0; end
-		if(px0*JuMP.dual(con_dx[1])<0); px0 = -px0; end
-		if(pxf*JuMP.dual(con_dx[N])<0); pxf = -pxf; end
-		
-		if (pc0 > 0) # Sign convention according to Pontryagin Maximum Principle
-		    sign = -1.0
-		else
-		    sign =  1.0
-		end
-		
-		pc = [ JuMP.dual(con_dc[i]) for i in 1:N ]
-		px = [ JuMP.dual(con_dx[i]) for i in 1:N ]
-		
-		pc = sign * [pc0; pc[1:N]]
-	
-		if nlp[:scheme] == :euler
-			px = sign * [px0; px[1:N]];
-		else
-			px = sign * [px0; (px[1:N-1]+px[2:N])/2; pxf]; # We add the multiplier from the limit conditions
-		end
-		
-		return t, x, u, c, px, pc
-	end;
-
-	function direct_initial_plot(p0_sol)
-
-		# cotangent space
-		times = range(t0, tf, length=2) # times for wavefronts
-
-		# plot of the flow
-		plt_flow = plot(legend=:topleft)
-		
-		p0s = 0.1.+range(p0min, p0max, length=20)	# range for the extremals
-		for i ∈ 1:length(p0s)
-		    sol = exp(p0s[i])
-		    x = [sol(t)[1] for t ∈ sol.t]
-		    p = [sol(t)[2] for t ∈ sol.t]
-		    label = false
-		    plot!(plt_flow, x, p, color=:black, label=label, z_order=:back, linewidth=0.5)
-		end
-
-		if true
-			# plot of wavefronts
-			p0s = range(p0min, p0max, length=200)	# range to get points on the wavefronts
-			xs  = zeros(length(p0s), length(times))
-			ps  = zeros(length(p0s), length(times))
-			for i ∈ 1:length(p0s)	# get points on the wavefronts
-			    sol = exp(p0s[i], saveat=times)
-			    xs[i, :] = [z[1] for z ∈ sol.(times)]
-			    ps[i, :] = [z[2] for z ∈ sol.(times)]
-			end
-			
-			for j ∈ 1:length(times) # plot the wavefronts
-			    label = false
-			    plot!(plt_flow, xs[:, j], ps[:, j], color=:black, linewidth=1, 
-					label=label, z_order=:front)
-			end
-		end
-		plot!(plt_flow, [0, 0], [p0min, p0max], color=:black, 
-			xlabel="x", ylabel="p", label=false, z_order=:back)
-		plot!(plt_flow, formatter = x -> format(x, precision=2))
-		plot!(plt_flow, xlims = (-1.1, 0.25), ylims =  (-0.25, 1))
-
-		# plot the solution
-		sol = exp(p0_sol)
-		x = [sol(t)[1] for t ∈ sol.t]
-		p = [sol(t)[2] for t ∈ sol.t]
-		
-		plot!(plt_flow, x, p, color=:red, linestyle=:dash, linewidth=1, 
-			label="solution", z_order=:back)
-		plot!(plt_flow, [x[end]], [p[end]], seriestype=:scatter, 
-			markersize=5, markerstrokewidth=0.5, color=:green, label=false, z_order=:front)
-		
-		# control
-		plt_control = plot(xlabel="t", ylabel="u")
-
-		# combine
-		plt = plot(plt_flow, plt_control, layout=(1, 2), size=(900, 400), leftmargin=5mm, bottommargin=5mm)
-		
-		#
-		return plt
-		
-	end
-	
-	function direct_plot!(plt, t, x, u, p, scheme, color)
-		plt_flow = plt[1]
-		plt_control = plt[2]
-		plot!(plt_flow, x, p, label=string(scheme), color=color, linewidth=2)
-		plot!(plt_control, t, u, linetype=:steppost, label=string(scheme), color=color, linewidth=2)
-		return plt
-	end
-
-	# 
-	plt_direct = direct_initial_plot(p0_solution)
-
-	#
-	function plot_errors!(plt, Ns, hs, e0s, eSs, scheme, color)
-		I = sortperm(Ns)
-		plot!(plt[1], hs[I], e0s[I], label=string(scheme), color=color, marker=:circle)
-		plot!(plt[2], hs[I], eSs[I], label=string(scheme), color=color, marker=:circle)
-		return plt
-	end
-
-	# initial plot for errors
-	plt_error_p0 = plot(xaxis=:log, yaxis=:log, xlims=(1e-3/2, 2e0), ylims=(1e-7, 1e2), legend=:topleft,
-	xlabel="h", ylabel="|p₀ - p₀⋆| / |p₀⋆|")
-	plt_error_Sp = plot(xaxis=:log, yaxis=:log, xlims=(1e-3/2, 2e0), ylims=(1e-7, 1e2), legend=:topleft,
-	xlabel="h", ylabel="|S(p₀)|")
-	plt_errors = plot(plt_error_p0, plt_error_Sp, layout=(1, 2), size=(900, 400), 
-		leftmargin=5mm, bottommargin=5mm)
-
-	# parameters initialization
-	color_e = :blue
-	color_t = :green
-	
-	md"Auxiliary function: direct method"
-end
-
-# ╔═╡ e90b0d60-bc2f-4d24-af93-178413aae187
-# ╠═╡ show_logs = false
-begin 
-
-	if (N isa Integer) && (N > 0)
-		
-		#
-		plt = deepcopy(plt_direct)
-		
-		# Euler
-		nlp_e = Euler(N)
-		t_e, x_e, u_e, c_e, px_e, pc_e = jump_solve(nlp_e)
-		plt = direct_plot!(plt, t_e, x_e, u_e, px_e, nlp_e[:scheme], color_e)
-	
-		# Trapezoidal
-		nlp_t = Trapezoidal(N)
-		t_t, x_t, u_t, c_t, px_t, pc_t = jump_solve(nlp_t)	
-		plt = direct_plot!(plt, t_t, x_t, u_t, px_t, nlp_t[:scheme], color_t)
-
-	end
-	
-end
-
-# ╔═╡ a9fd9f1c-744b-416f-a77a-a5b3063642d8
-begin 
-	reset_errors_plot_data # just to make this cell reactive
-	Ns = []
-	hs = []
-	e0s_e = []
-	e0s_t = []
-	eSs_e = []
-	eSs_t = []
-end;
-
-# ╔═╡ 4773606a-a488-4925-b5e9-71c3de04d11a
-# ╠═╡ show_logs = false
-begin
-
-	if (N ∉ Ns) && (N isa Integer) && (N > 0)
-
-		#
-		push!(Ns, N)
-		
-		# step length
-		h = (tf-t0)/N
-		push!(hs, h)
-		
-		# error on initial costate
-		p0_e = px_e[1] # euler
-		push!(e0s_e, abs(p0_e-p0_solution)/abs(p0_solution))
-		
-		#
-		p0_t = px_t[1] # trapezoidal
-		push!(e0s_t, abs(p0_t-p0_solution)/abs(p0_solution))
-
-		# errors on the shooting function
-		push!(eSs_e, abs(S(p0_e)))
-		push!(eSs_t, abs(S(p0_t)))
-
-	end
-
-	if @isdefined nlp_e
-		
-		#
-		plt_errors_current = deepcopy(plt_errors)
-	
-		#
-		plt_errors_current = plot_errors!(plt_errors_current, Ns, hs, e0s_e, eSs_e, nlp_e[:scheme], color_e)
-		plt_errors_current = plot_errors!(plt_errors_current, Ns, hs, e0s_t, eSs_t, nlp_t[:scheme], color_t)
-
-	end
-	
-end
-
-# ╔═╡ 562ae176-9781-4820-942f-9a3cccf9c732
+# ╔═╡ bd7c1a7c-ca63-45ee-ba04-6e03555f4e3f
 begin
 	struct TwoColumns{L, R}
 	    left::L
@@ -1039,7 +565,7 @@ begin
 	md"Declaration of useful tools."
 end
 
-# ╔═╡ 7e8b0e71-cefe-444c-be6e-446f1e47722b
+# ╔═╡ 8cca0fff-a438-46d3-a433-15df2cf1e3b3
 begin
 	qr_code_url = "https://raw.githubusercontent.com/control-toolbox/GdRMOA2023/main/ct-qr-code.svg"
 	TwoColumns(
@@ -1049,7 +575,7 @@ begin
 	md"""
 	!!! info "Link to this notebook"
 		
-		<https://control-toolbox.org/GdRMOA2023/basic.html>
+		<https://control-toolbox.org/GdRMOA2023/bsb.html>
 	
 	To launch it:
 		
@@ -1064,7 +590,7 @@ begin
 	)
 end
 
-# ╔═╡ c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
+# ╔═╡ cdb07893-1b47-4958-a3c0-0df816f6792e
 begin
 	html"""<style>
 		main {
@@ -1092,8 +618,6 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Formatting = "59287772-0a20-5a39-b81b-1366585eb4c0"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
-Ipopt = "b6b21f68-93f8-5de0-b562-5493be1d77c9"
-JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 MINPACK = "4854310b-de5a-5eb6-a2a5-c1dee2bd17f9"
 OptimalControl = "5f98b655-cc9a-415a-b60e-744165666948"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
@@ -1104,8 +628,6 @@ PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Formatting = "~0.4.2"
 ForwardDiff = "~0.10.36"
 HypertextLiteral = "~0.9.4"
-Ipopt = "~1.4.2"
-JuMP = "~1.15.1"
 MINPACK = "~1.1.1"
 OptimalControl = "~0.7.6"
 Plots = "~1.39.0"
@@ -1119,7 +641,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "4a7f92c70588e97584d4137aa76e2dad4003b3c5"
+project_hash = "4ae580eacdfccd7b347aab3a96a064593c1b341d"
 
 [[deps.ADNLPModels]]
 deps = ["ColPack", "ForwardDiff", "LinearAlgebra", "NLPModels", "Requires", "ReverseDiff", "SparseArrays"]
@@ -1915,18 +1437,6 @@ deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "6f2675ef130a300a112286de91973805fcc5ffbc"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
 version = "2.1.91+0"
-
-[[deps.JuMP]]
-deps = ["LinearAlgebra", "MacroTools", "MathOptInterface", "MutableArithmetics", "OrderedCollections", "Printf", "SnoopPrecompile", "SparseArrays"]
-git-tree-sha1 = "3700a700bc80856fe673b355123ae4574f2d5dfe"
-uuid = "4076af6c-e467-56ae-b986-b466b2749572"
-version = "1.15.1"
-
-    [deps.JuMP.extensions]
-    JuMPDimensionalDataExt = "DimensionalData"
-
-    [deps.JuMP.weakdeps]
-    DimensionalData = "0703355e-b756-11e9-17c0-8b28908087d0"
 
 [[deps.JuliaInterpreter]]
 deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
@@ -3382,49 +2892,53 @@ version = "1.4.1+1"
 """
 
 # ╔═╡ Cell order:
-# ╟─89d454b5-5077-42a9-9ea9-e44b9a4f0be1
-# ╟─7e8b0e71-cefe-444c-be6e-446f1e47722b
-# ╟─13e743c6-0313-44a3-8a88-c64657ee7a34
-# ╟─301e03aa-00e9-47e0-b9ab-f00787bff820
-# ╠═76175aca-885b-4f7a-8883-4b0002297576
-# ╟─e18cc0fa-e1cc-45de-b0ab-b7dadc5d27d6
-# ╟─2bd8abe2-6531-11ee-38f5-5becee44a42f
-# ╠═016e2375-6fc1-4496-a094-0be801dfca17
-# ╟─422e9ce0-1012-47e0-ad03-c4cd3ebbd0ed
-# ╟─6784a1c0-1f8b-4e6c-8bf4-1260ddfee22f
-# ╠═17b04d51-f8db-44e9-863b-de6a75cc3327
-# ╠═49b0fa4c-11fe-4b4e-ba13-caa7a172aa20
-# ╟─7466eab0-85c7-43c9-bbfb-419d888571e3
-# ╠═9b530a46-1f8d-43f5-9e30-167d35c245f9
-# ╠═ee4d6d59-2965-4233-b991-3778e06fd233
-# ╟─633515a6-0d41-4c80-be2f-0be8f8d5ec3e
-# ╠═2f07ceb7-1133-48f8-b807-b14fbdf50754
-# ╠═f9077dd0-7ae7-49bd-a538-103a571928fc
-# ╠═703868e1-d368-482a-a617-65a1fdef13b2
-# ╠═3a992e9c-1c16-40d9-a76a-2364494a2dda
-# ╠═ece70549-23fb-4683-accc-6f58d2e591bf
-# ╟─b853f0c8-a8b9-4d26-bc41-bf119f50ccd6
-# ╟─8ddb54a9-a197-4f66-a5a0-f4ab01c45564
-# ╟─162f142e-d9ab-4e95-af4d-653e5ec8c975
-# ╟─a84f2989-99dc-4238-b0ab-452fb414239c
-# ╟─3c36b2fa-e27a-471e-8b59-756e06fb2f70
-# ╠═50d5fe4c-cacf-43c8-a5b9-6e4ed46fe7dc
-# ╟─dd66e904-468f-44b9-b989-3547e52f072b
-# ╠═20142a45-ccd4-49f3-badb-440b7bd070ec
-# ╟─573cdfec-5330-4d2d-98d2-540c90be9c06
-# ╠═e6394522-03c9-467b-9408-ea1b1eee2b47
-# ╟─6daaa6cc-2937-4a2b-b991-e7bdbc696e4c
-# ╟─c93b4007-b1b5-405d-bd64-f9ea1e0ed906
-# ╟─e90b0d60-bc2f-4d24-af93-178413aae187
-# ╟─4773606a-a488-4925-b5e9-71c3de04d11a
-# ╟─869eeeb3-9948-46b5-97f3-a64b9dbcba9a
-# ╟─d945e217-59e0-4a55-9381-fab63947f0fb
-# ╠═45a81a29-82eb-4280-a965-ae1afe89091f
-# ╠═74d3eafa-09d7-4187-b4dd-21312f964581
-# ╟─c33b7143-3736-4067-aca1-19052169765f
-# ╟─23fb8acf-ab93-4392-9a94-c17ae408eb54
-# ╠═a9fd9f1c-744b-416f-a77a-a5b3063642d8
-# ╟─562ae176-9781-4820-942f-9a3cccf9c732
-# ╟─c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
+# ╟─2ac2c0aa-6c1e-11ee-0737-754127e4118c
+# ╟─8cca0fff-a438-46d3-a433-15df2cf1e3b3
+# ╟─3cc16521-49ef-464b-ae5a-c76d465c75ad
+# ╟─a6cd1c83-9a20-4e19-bae3-d2223558d0f8
+# ╠═83ecdc0e-8a15-4127-abd2-bd254f51b26d
+# ╠═2ce6b9cd-74d8-4e92-aff5-82c9a6c61a2d
+# ╟─2c0c3151-3aa8-4684-ba2c-57a3e08799fd
+# ╠═cc07d132-0c67-41bd-b7c1-910207ce573c
+# ╟─308c507a-c36f-4ff3-991b-f3aa958fba66
+# ╠═6e630d12-385d-4f69-abfc-0e8be43a4954
+# ╟─d33b844a-83b2-4d8b-816a-8e36ca084be6
+# ╟─2858bfc3-d180-48cd-9780-d2c915e9354a
+# ╟─17d7399d-ef29-423a-bddc-d3b75918bd70
+# ╟─c0d12757-fa5a-4fc5-b16e-a207583759e9
+# ╟─d06384a8-c332-453a-b324-3ea51bc28788
+# ╟─92b5f626-a28c-45af-9b3f-1a8b023c913b
+# ╟─0f4553b1-bb16-4320-8a58-d582ce5111a8
+# ╠═751afc3a-4358-497a-ba81-1259b325490b
+# ╠═083454c1-3fb2-458f-adbf-c5ef5b614e28
+# ╠═6e2f76e2-18f9-484c-8b27-019c1536cd28
+# ╟─1077a910-f6f2-45c5-b0fc-f04d22501611
+# ╟─5d6e0fe2-2e2f-4309-9a44-1dd77b786989
+# ╟─fe3a3331-9da5-4638-8c43-a0bd950e68cd
+# ╠═c6ebf231-1cf6-48b5-a1fd-fde9379d9def
+# ╠═febf637a-2a2e-430d-9cb6-8bbdf1f93c31
+# ╠═da6de238-f061-4579-b958-bf075df80ac8
+# ╟─3e22b580-f0fe-48ae-ba73-89e24b7f7e0f
+# ╟─e54fbb62-1b8c-4862-9205-afe31d0d8203
+# ╟─1cda827b-e242-4627-a7ce-e0c12c58c952
+# ╠═ee4f1730-1c40-453d-a144-0fb90b0a8d62
+# ╟─49a39713-6212-46cf-8d8e-d27bdc7f015d
+# ╠═8be85df8-7eb4-42f3-acc8-b482f138dde0
+# ╠═4dc3e568-4c2d-4a8a-bcd1-8bbffc9cbb54
+# ╠═6251fa19-88d9-4f71-bfef-8bbec03f7d13
+# ╠═403950a5-df02-407c-a32a-cc1a1603d17e
+# ╟─ff04a5a6-1062-4a98-a86d-602a5de2ce20
+# ╠═2cf6277c-8add-4693-ad80-5d8a1fa29aa1
+# ╠═065db00d-342a-4010-be15-4be4cd9ff005
+# ╟─b5ef6acc-6374-493f-ad02-407a3a84c5bb
+# ╠═a08cd686-cb73-4657-887f-d2c08fda6932
+# ╠═aa29362f-9ed2-4c79-aef6-ca8d4c28dc99
+# ╠═af90fd52-c990-4dab-8697-a672e41851d3
+# ╟─f5acfa12-4e9c-417e-bbbc-8f819ef195b9
+# ╟─098f20a5-cc3e-476d-9ae5-560eab08d7d7
+# ╠═64dbd6b2-af29-4cc5-95d6-455bb67df0b5
+# ╠═2072c9de-e01e-4d26-ae33-0cafca0c3ac7
+# ╠═bd7c1a7c-ca63-45ee-ba04-6e03555f4e3f
+# ╠═cdb07893-1b47-4958-a3c0-0df816f6792e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
