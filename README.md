@@ -1,4 +1,4 @@
-# Numerical methods for classical and hybrid optimal control problems
+# Introduction to direct and indirect methods in optimal control
 
 <img width="800px" alt="Capture d’écran 2023-10-09 à 18 27 40" src="https://github.com/control-toolbox/GdRMOA2023/assets/66357348/25e77d9b-bcdf-4ddd-84fc-b916a3031a54">
 
@@ -20,10 +20,13 @@ subject to
 \dot{x}(t) = f(x(t), u(t)),\quad t \in [t_0, t_f]
 ```
 
-plus boundary, control and state constraints. We present:
+plus boundary, control and state constraints. 
 
-- [an introduction to direct and indirect methods](https://control-toolbox.org/GdRMOA2023/basic.html)
+We present:
+
+- [an introduction to direct and indirect methods on a basic smooth example](https://control-toolbox.org/GdRMOA2023/basic.html)
 - the `OptimalControl.jl` package on a [basic example](https://control-toolbox.org/docs/optimalcontrol/stable/tutorial-basic-example.html)
+- [a bang-singular-bang example](https://control-toolbox.org/GdRMOA2023/bsb.html)
 - a more [advanced example: the Goddard problem](https://control-toolbox.org/docs/optimalcontrol/stable/tutorial-goddard.html), which combines direct and indirect methods.
 
 For fun!
