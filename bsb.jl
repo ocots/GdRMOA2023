@@ -128,7 +128,7 @@ md"""# Direct method
 
 # ╔═╡ cc07d132-0c67-41bd-b7c1-910207ce573c
 # we use the OptimalControl.jl package to solve the optimal control problem via the direct method
-# the scheme is the Trapezoidal rule
+# the scheme is the trapezoidal rule
 function direct_solve(ocp, N, tol_convergence, tol_constraints)
 	"""
 		ocp: optimal control problem
