@@ -32,21 +32,26 @@ begin
 end
 
 # ╔═╡ 89d454b5-5077-42a9-9ea9-e44b9a4f0be1
-md"# An introduction to direct and indirect methods
+md"""# An introduction to direct and indirect methods
 
-Olivier Cots (Univ. Toulouse)
+[Olivier Cots (Univ. Toulouse)](https://ocots.github.io)
 
 Journées annuelles 2023 du GdR MOA, 18 octobre 2023
 
-**Abstract.** In this tutorial we introduce the indirect shooting method and the direct method on a basic example."
+!!! abstract 
+
+	In this tutorial we introduce the indirect shooting method and the direct method on a basic example.
+"""
 
 # ╔═╡ 13e743c6-0313-44a3-8a88-c64657ee7a34
-html"<button onclick='present()'>Presentation mode: Enter / Leave</button>"
+html"""
+<button class=button-3 onclick='present()' style="margin-left:10px">Presentation mode: Enter / Leave</button>
+"""
 
 # ╔═╡ 301e03aa-00e9-47e0-b9ab-f00787bff820
 md"# Basic example
 
-Let us consider problem which consists in minimising the $L^2$-norm of the control
+Let us consider the following problem which consists in minimising the $L^2$-norm of the control
 
 ```math
         \min \frac{1}{2} \int_{t_0}^{t_f} u^2(t) \, \mathrm{d} t
@@ -106,24 +111,16 @@ md"""# Indirect simple shooting
 
 where $x_0$, $x_f$ and $t_f>0$ are fixed and we seek $u$ in $L^\infty([0, t_f],\mathbb{R}^m)$.
 
-➡ From Pontryagin's Maximum Principle (PMP), if $(x, u)$ is solution to (OCP) under usual assumptions,
-then, there exists a costate $p(\cdot) \in AC([0, t_f] ,\mathbb{R}^n)$, a scalar $p^0\in \{-1, 0\}$, 
-such that $(p(\cdot), p^0)\ne(0,0)$ and for $t \in [0, t_f]$ a.e.:
-
-```math
-	\dot{x}(t) =  \nabla_p H(x(t),p(t),u(t)), \quad
-	\dot{p}(t) = -\nabla_x H(x(t),p(t),u(t)),
-```
-
-where $H(x,p,u) := ({p}\,|\,{f(x,u)}) + p^0 \, f^0(x,u)$. Moreover, we have the maximisation condition:
-
-```math
-    H(x(t),p(t),u(t)) = \max_{{w\in U}} H(x(t),p(t),{w}).
-```
-
 ➡ Let us assume that for any extremal $(z(\cdot), p^0, u(\cdot))$, with $z=(x, p)$, 
-we can write $u(t) = u(z(t))$, with $z \mapsto u(z)$ at least of class $\mathcal{C}^1$.
-Plugging $u(z)$ into $\vec{H} = (\nabla_p H, -\nabla_x H)$, find a solution to the PMP consists if solving
+we can write $u(t) = u(z(t))$, with 
+
+```math 
+z \mapsto u(z)
+```
+
+at least of class $\mathcal{C}^1$.
+
+Plugging $u(z)$ into $\vec{H} = (\nabla_p H, -\nabla_x H)$, then, solving the PMP consists in solving
 the Boundary Value Problem (BVP):
 
 ```math
@@ -151,25 +148,48 @@ $\dot{z}(t) = \vec{H}(z(t), u(z(t)))$, $z(0) = (x_0,p_0)$.
 ➡ At the end, solving (BVP) is equivalent to solve $S(p_0) = 0$.
 This is what we call the **indirect simple shooting method**.
 
-➡ Summary:
+➡ Formally, we have:
 
 ```julia
-BVP = PMP(OCP, u) # u being the maximising control
-S = Shooting(BVP) # return the shooting function
+PMP(OCP) + u(z) => BVP  # u being the maximising control
+
+Shooting(BVP)   => S 	# S is the shooting function
 ```
 
+"""
+
+# ╔═╡ 6532f67c-50a6-4307-b72e-d011d0930cb9
+md"""
+!!! info
+
+	From Pontryagin's Maximum Principle (PMP), if $(x, u)$ is solution to (OCP) under usual assumptions,
+	then, there exists a costate $p(\cdot) \in AC([0, t_f] ,\mathbb{R}^n)$, a scalar $p^0\in \{-1, 0\}$, 
+	such that $(p(\cdot), p^0)\ne(0,0)$ and for $t \in [0, t_f]$ a.e.:
+	
+	```math
+		\dot{x}(t) =  \nabla_p H(x(t),p(t),u(t)), \quad
+		\dot{p}(t) = -\nabla_x H(x(t),p(t),u(t)),
+	```
+	
+	where $H(x,p,u) := ({p}\,|\,{f(x,u)}) + p^0 \, f^0(x,u)$. Moreover, we have the maximisation condition:
+	
+	```math
+	    H(x(t),p(t),u(t)) = \max_{{w\in U}} H(x(t),p(t),{w}).
+	```
+
+	A quadruplet $(x, p, p^0, u)$ is called an **extremal**.
 """
 
 # ╔═╡ 2bd8abe2-6531-11ee-38f5-5becee44a42f
 md"## Maximising control
 
-We introduce the pseudo-Hamiltonian
+Let's go back to the basic example. We introduce the pseudo-Hamiltonian
 
 ```math
 H(x, p, u) = p(-x + \alpha\, x^2 + u) + p^0\, u^2/2, \quad p^0 = -1~\text{(normal case)}.
 ```
 
-The maximisation condition from the PMP
+The maximisation condition from the PMP (note that $u \mapsto H(x, p, u)$ is concave):
 
 ```math
 \nabla_u H(x(t), p(t), u(t)) = p(t) - u(t) = 0
@@ -222,7 +242,7 @@ where $[t] =  (x(t),p(t),u(x(t), p(t)))$.
 # ╔═╡ 6784a1c0-1f8b-4e6c-8bf4-1260ddfee22f
 md"""## Hamiltonian vector field
 
-To achive our goal, that is to solve the (BVP), let us first introduce the pseudo-Hamiltonian 
+To achieve our goal, that is to solve the (BVP), let us first introduce the pseudo-Hamiltonian 
 vector field notation
 
 ```math
@@ -241,15 +261,6 @@ Our goal becomes to solve
 \pi( \varphi_{t_0, x_0, p_0}(t_f) ) = x_f, \quad \pi(x, p) = x.
 ```
 
-!!! note "Nota bene"
-
-    Actually, $\varphi_{t_0, x_0, p_0}(\cdot)$ is also solution of
-    
-    ```math
-        \dot{z}(t) = \vec{\mathbf{H}}(z(t)), \quad z(t_0) = (x_0, p_0),
-    ```
-    where $\mathbf{H}(z) = H(z, u(z))$ and $\vec{\mathbf{H}} = (\nabla_p \mathbf{H}, -\nabla_x \mathbf{H})$. This is what is actually computed by `Flow` below.
-
 To compute $\varphi$ with the `OptimalControl` package, we define the flow of the associated Hamiltonian vector field by:
 
 """
@@ -261,12 +272,25 @@ To compute $\varphi$ with the `OptimalControl` package, we define the flow of th
 # ╠═╡ show_logs = false
 φ(t0, x0, 0.5, tf) # p0 = 0.5
 
+# ╔═╡ 6266ed8e-7111-498f-8a4e-b287fd7e00c9
+md"""
+!!! note "Nota bene"
+
+    Actually, $\varphi_{t_0, x_0, p_0}(\cdot)$ is also solution of
+    
+    ```math
+        \dot{z}(t) = \vec{\mathbf{H}}(z(t)), \quad z(t_0) = (x_0, p_0),
+    ```
+    where $\mathbf{H}(z) = H(z, u(z))$ and $\vec{\mathbf{H}} = (\nabla_p \mathbf{H}, -\nabla_x \mathbf{H})$. 
+	This is what is actually computed by `Flow`.
+"""
+
 # ╔═╡ 7466eab0-85c7-43c9-bbfb-419d888571e3
 md"""## Shooting method
 
 Now, we are in position to define mathematically the equation we have to solve in order to solve (BVP).
 
-We introduce the **shooting function**.
+We introduce the **shooting function**:
 
 ```math
     \begin{array}{rlll}
@@ -299,7 +323,7 @@ with $d^{(k)}$ the solution of the linear system $J_S(p_0^{(k)}) \cdot d = - S(p
 """
 
 # ╔═╡ 2f07ceb7-1133-48f8-b807-b14fbdf50754
-Jₛ(p0) = ForwardDiff.jacobian(x -> [S(x[1])], [p0])[1, 1];
+Jₛ(p0) = ForwardDiff.jacobian(x -> [S(x[1])], [p0])[1, 1]; # S'(p0)
 
 # ╔═╡ f9077dd0-7ae7-49bd-a538-103a571928fc
 # ╠═╡ show_logs = false
@@ -329,7 +353,7 @@ begin
 	ξ = [ p0 ] 							# initial guess
 	indirect_sol = fsolve(nle, ξ)   	# resolution of S(p0) = 0
 	p0_solution  = indirect_sol.x[1] 	# costate solution
-end
+end;
 
 # ╔═╡ b853f0c8-a8b9-4d26-bc41-bf119f50ccd6
 md"""## Plots
@@ -411,10 +435,10 @@ LB \le C(X) \le UB
 \right.
 ```
 
-Summary:
+Formally:
 
 ```julia
-NLP = Direct(OCP, scheme) # scheme is in general a Runge-Kutta scheme
+Direct(OCP, scheme) => NLP # scheme is in general a Runge-Kutta scheme
 ```
 
 """
@@ -554,8 +578,13 @@ md"## Plots"
 # ╔═╡ c93b4007-b1b5-405d-bd64-f9ea1e0ed906
 @bind N NumberField(1:1000, default=3)
 
+# ╔═╡ 3a9a57e7-5319-48fa-be52-2dd48659541f
+reset_plot() = @htl("""
+<button class=button-3 style="margin-left:10px">Reset above errors plot</button>
+""")
+
 # ╔═╡ 869eeeb3-9948-46b5-97f3-a64b9dbcba9a
-@bind reset_errors_plot_data Button("Reset above errors plot")
+@bind reset_errors_plot_data reset_plot()
 
 # ╔═╡ d945e217-59e0-4a55-9381-fab63947f0fb
 md"# Appendix"
@@ -1056,6 +1085,7 @@ begin
 	```julia
 	using Pkg
 	Pkg.add("Pluto")
+	
 	using Pluto
 	Pluto.run()
 	```
@@ -1085,6 +1115,64 @@ begin
 	css style.
 	"""
 end
+
+# ╔═╡ 07d9079d-5205-462d-86e8-2d4e8dc03f5f
+@htl("""
+<style>
+
+.button-3 {
+  appearance: none;
+  background-color: #2ea44f;
+  border: 1px solid rgba(27, 31, 35, .15);
+  border-radius: 6px;
+  box-shadow: rgba(27, 31, 35, .1) 0 1px 0;
+  box-sizing: border-box;
+  color: #fff;
+  cursor: pointer;
+  display: inline-block;
+  font-family: -apple-system,system-ui,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  padding: 6px 16px;
+  position: relative;
+  text-align: center;
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.button-3:focus:not(:focus-visible):not(.focus-visible) {
+  box-shadow: none;
+  outline: none;
+}
+
+.button-3:hover {
+  background-color: #2c974b;
+}
+
+.button-3:focus {
+  box-shadow: rgba(46, 164, 79, .4) 0 0 0 3px;
+  outline: none;
+}
+
+.button-3:disabled {
+  background-color: #94d3a2;
+  border-color: rgba(27, 31, 35, .1);
+  color: rgba(255, 255, 255, .8);
+  cursor: default;
+}
+
+.button-3:active {
+  background-color: #298e46;
+  box-shadow: rgba(20, 70, 32, .2) 0 1px 0 inset;
+}
+</style>
+css style: button
+""")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -3388,12 +3476,14 @@ version = "1.4.1+1"
 # ╟─301e03aa-00e9-47e0-b9ab-f00787bff820
 # ╠═76175aca-885b-4f7a-8883-4b0002297576
 # ╟─e18cc0fa-e1cc-45de-b0ab-b7dadc5d27d6
+# ╟─6532f67c-50a6-4307-b72e-d011d0930cb9
 # ╟─2bd8abe2-6531-11ee-38f5-5becee44a42f
 # ╠═016e2375-6fc1-4496-a094-0be801dfca17
 # ╟─422e9ce0-1012-47e0-ad03-c4cd3ebbd0ed
 # ╟─6784a1c0-1f8b-4e6c-8bf4-1260ddfee22f
 # ╠═17b04d51-f8db-44e9-863b-de6a75cc3327
 # ╠═49b0fa4c-11fe-4b4e-ba13-caa7a172aa20
+# ╟─6266ed8e-7111-498f-8a4e-b287fd7e00c9
 # ╟─7466eab0-85c7-43c9-bbfb-419d888571e3
 # ╠═9b530a46-1f8d-43f5-9e30-167d35c245f9
 # ╠═ee4d6d59-2965-4233-b991-3778e06fd233
@@ -3402,7 +3492,7 @@ version = "1.4.1+1"
 # ╠═f9077dd0-7ae7-49bd-a538-103a571928fc
 # ╠═703868e1-d368-482a-a617-65a1fdef13b2
 # ╠═3a992e9c-1c16-40d9-a76a-2364494a2dda
-# ╠═ece70549-23fb-4683-accc-6f58d2e591bf
+# ╟─ece70549-23fb-4683-accc-6f58d2e591bf
 # ╟─b853f0c8-a8b9-4d26-bc41-bf119f50ccd6
 # ╟─8ddb54a9-a197-4f66-a5a0-f4ab01c45564
 # ╟─162f142e-d9ab-4e95-af4d-653e5ec8c975
@@ -3419,6 +3509,7 @@ version = "1.4.1+1"
 # ╟─4773606a-a488-4925-b5e9-71c3de04d11a
 # ╟─869eeeb3-9948-46b5-97f3-a64b9dbcba9a
 # ╟─d945e217-59e0-4a55-9381-fab63947f0fb
+# ╟─3a9a57e7-5319-48fa-be52-2dd48659541f
 # ╠═45a81a29-82eb-4280-a965-ae1afe89091f
 # ╠═74d3eafa-09d7-4187-b4dd-21312f964581
 # ╟─c33b7143-3736-4067-aca1-19052169765f
@@ -3426,5 +3517,6 @@ version = "1.4.1+1"
 # ╠═a9fd9f1c-744b-416f-a77a-a5b3063642d8
 # ╟─562ae176-9781-4820-942f-9a3cccf9c732
 # ╟─c5d6ceee-b8a4-44c7-ba60-32fd4d1b1fb6
+# ╟─07d9079d-5205-462d-86e8-2d4e8dc03f5f
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -31,19 +31,23 @@ end
 # ╔═╡ 2ac2c0aa-6c1e-11ee-0737-754127e4118c
 md"# Bang-Singular-Bang case: direct and indirect
 
-Olivier Cots (Univ. Toulouse)
+[Olivier Cots (Univ. Toulouse)](https://ocots.github.io)
 
 Journées annuelles 2023 du GdR MOA, 18 octobre 2023
 
-**Abstract.** In this tutorial we present how to combine direct and indirect methods to solve an optimal control problem with Bang-Singular-Bang optimal structure. The idea is to use the direct method to determine the optimal structure and find an initial guess, respectively to define the shooting function and solve the associated shooting equations."
+!!! abstract
+
+	In this tutorial we present how to combine direct and indirect methods to solve an optimal control problem with Bang-Singular-Bang optimal structure. The idea is to use the direct method to determine the optimal structure and find an initial guess, respectively to define the shooting function and solve the associated shooting equations."
 
 # ╔═╡ 3cc16521-49ef-464b-ae5a-c76d465c75ad
-html"<button onclick='present()'>Presentation mode: Enter / Leave</button>"
+html"""
+<button class=button-3 onclick='present()' style="margin-left:10px">Presentation mode: Enter / Leave</button>
+"""
 
 # ╔═╡ a6cd1c83-9a20-4e19-bae3-d2223558d0f8
-md"# Optimal control problem
+md"""# Optimal control problem
 
-Let us consider problem which consists in minimising the $L^2$-norm of the state
+Let us consider the following problem which consists in minimising the $L^2$-norm of the state
 
 ```math
         \min \frac{1}{2} \int_{0}^{t_f} x^2(t) \, \mathrm{d} t
@@ -54,10 +58,42 @@ limit conditions $x(0) = 1$, $x(t_f) = 1/2$, where $t_f$ is fixed but not given 
 
 The optimal control law may be discontinuous and composed of **bang arcs** with $u \in \{-1, 1\}$ 
 and **singular arcs** with $u \in (-1, 1)$. To solve this optimal control problem by indirect methods 
-and find the **switching times**, we need to implement shooting function taking into account 
-the optimal structure. We will use the direct method to determine the optimal structure.
+and find the **switching times**, we need to implement a shooting function taking into account 
+the optimal structure. 
 
-!!! note 
+!!! info "Steps"
+
+	1. We first use the direct method to determine the optimal structure and compute a good initial guess
+	2. respectively to define the shooting function and make converge the shooting method.
+"""
+
+# ╔═╡ 83ecdc0e-8a15-4127-abd2-bd254f51b26d
+begin
+	t0 = 0
+	x0 = 1
+	xf = 0.5
+end;
+
+# ╔═╡ 2ce6b9cd-74d8-4e92-aff5-82c9a6c61a2d
+# we use the OptimalControl.jl package to define the optimal control problem
+function OCP(tf)
+	@def ocp begin
+	    t ∈ [ t0, tf ], time
+	    x ∈ R, state
+	    u ∈ R, control
+		-1 ≤ u(t) ≤ 1
+	    x(t0) == x0
+	    x(tf) == xf
+	    ẋ(t) == u(t)
+	    ∫( 0.5x(t)^2 ) → min
+	end
+	return ocp
+end;
+
+# ╔═╡ fd6876bb-b06c-48af-8d35-8a7c83a1ce05
+md"""
+
+!!! tip 
 
 	To this optimal control problem is associated the stationnary optimization problem
 	
@@ -83,30 +119,7 @@ the optimal structure. We will use the direct method to determine the optimal st
 	```
 	
 	with $0 < t_1 < t_2 < t_f$. We say that the control is **Bang-Singular-Bang**.
-"
-
-# ╔═╡ 83ecdc0e-8a15-4127-abd2-bd254f51b26d
-begin
-	t0 = 0
-	x0 = 1
-	xf = 0.5
-end;
-
-# ╔═╡ 2ce6b9cd-74d8-4e92-aff5-82c9a6c61a2d
-# we use the OptimalControl.jl package to define the optimal control problem
-function OCP(tf)
-	@def ocp begin
-	    t ∈ [ t0, tf ], time
-	    x ∈ R, state
-	    u ∈ R, control
-		-1 ≤ u(t) ≤ 1
-	    x(t0) == x0
-	    x(tf) == xf
-	    ẋ(t) == u(t)
-	    ∫( 0.5x(t)^2 ) → min
-	end
-	return ocp
-end;
+"""
 
 # ╔═╡ 2c0c3151-3aa8-4684-ba2c-57a3e08799fd
 md"""# Direct method
@@ -197,7 +210,7 @@ begin
 	  </tr>
 	  <tr>
 	    <td>time steps</td>
-	    <td>$( @bind N_influence  Slider([1; 10:10:300], default=100) ) </td>
+	    <td>$( @bind N_influence  Slider([2; 10:10:300], default=100) ) </td>
 	  </tr>
 	  <tr>
 	    <td>convergence tolerance</td>
@@ -582,6 +595,7 @@ begin
 	```julia
 	using Pkg
 	Pkg.add("Pluto")
+	
 	using Pluto
 	Pluto.run()
 	```
@@ -611,6 +625,64 @@ begin
 	css style.
 	"""
 end
+
+# ╔═╡ f54c6a24-1872-480e-86ff-c9728e6c8936
+@htl("""
+<style>
+
+.button-3 {
+  appearance: none;
+  background-color: #2ea44f;
+  border: 1px solid rgba(27, 31, 35, .15);
+  border-radius: 6px;
+  box-shadow: rgba(27, 31, 35, .1) 0 1px 0;
+  box-sizing: border-box;
+  color: #fff;
+  cursor: pointer;
+  display: inline-block;
+  font-family: -apple-system,system-ui,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  padding: 6px 16px;
+  position: relative;
+  text-align: center;
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.button-3:focus:not(:focus-visible):not(.focus-visible) {
+  box-shadow: none;
+  outline: none;
+}
+
+.button-3:hover {
+  background-color: #2c974b;
+}
+
+.button-3:focus {
+  box-shadow: rgba(46, 164, 79, .4) 0 0 0 3px;
+  outline: none;
+}
+
+.button-3:disabled {
+  background-color: #94d3a2;
+  border-color: rgba(27, 31, 35, .1);
+  color: rgba(255, 255, 255, .8);
+  cursor: default;
+}
+
+.button-3:active {
+  background-color: #298e46;
+  box-shadow: rgba(20, 70, 32, .2) 0 1px 0 inset;
+}
+</style>
+css style: button
+""")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2898,6 +2970,7 @@ version = "1.4.1+1"
 # ╟─a6cd1c83-9a20-4e19-bae3-d2223558d0f8
 # ╠═83ecdc0e-8a15-4127-abd2-bd254f51b26d
 # ╠═2ce6b9cd-74d8-4e92-aff5-82c9a6c61a2d
+# ╟─fd6876bb-b06c-48af-8d35-8a7c83a1ce05
 # ╟─2c0c3151-3aa8-4684-ba2c-57a3e08799fd
 # ╠═cc07d132-0c67-41bd-b7c1-910207ce573c
 # ╟─308c507a-c36f-4ff3-991b-f3aa958fba66
@@ -2938,7 +3011,8 @@ version = "1.4.1+1"
 # ╟─098f20a5-cc3e-476d-9ae5-560eab08d7d7
 # ╠═64dbd6b2-af29-4cc5-95d6-455bb67df0b5
 # ╠═2072c9de-e01e-4d26-ae33-0cafca0c3ac7
-# ╠═bd7c1a7c-ca63-45ee-ba04-6e03555f4e3f
-# ╠═cdb07893-1b47-4958-a3c0-0df816f6792e
+# ╟─bd7c1a7c-ca63-45ee-ba04-6e03555f4e3f
+# ╟─cdb07893-1b47-4958-a3c0-0df816f6792e
+# ╟─f54c6a24-1872-480e-86ff-c9728e6c8936
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
