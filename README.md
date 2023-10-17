@@ -30,4 +30,4 @@ We present:
 - a more [advanced example: the Goddard problem](https://control-toolbox.org/docs/optimalcontrol/stable/tutorial-goddard.html), which combines direct and indirect methods.
 - Other examples: [HMP](https://github.com/control-toolbox/HMP), [control loss](https://github.com/control-toolbox/control-loss)
 
-For fun: [ct playground](https://control-toolbox.org/GdRMOA2023/ct-playground.html) !
+For fun: [ct playground](https://control-toolbox.org/GdRMOA2023/ct-playground.html)!
