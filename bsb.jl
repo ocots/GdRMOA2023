@@ -320,7 +320,7 @@ The shooting function will depend on the optimal structure.
 
 ```julia
 S(p0) 			# bang
-S(p0, t1)		# bang-singular
+S(p0, t1)		# bang-bang
 S(p0, t1, t2)	# bang-singular-bang
 ```
 
@@ -2985,7 +2985,7 @@ version = "1.4.1+1"
 # ╠═751afc3a-4358-497a-ba81-1259b325490b
 # ╠═083454c1-3fb2-458f-adbf-c5ef5b614e28
 # ╠═6e2f76e2-18f9-484c-8b27-019c1536cd28
-# ╟─1077a910-f6f2-45c5-b0fc-f04d22501611
+# ╠═1077a910-f6f2-45c5-b0fc-f04d22501611
 # ╟─5d6e0fe2-2e2f-4309-9a44-1dd77b786989
 # ╟─fe3a3331-9da5-4638-8c43-a0bd950e68cd
 # ╠═c6ebf231-1cf6-48b5-a1fd-fde9379d9def

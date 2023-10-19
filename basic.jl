@@ -438,7 +438,7 @@ LB \le C(X) \le UB
 Formally:
 
 ```julia
-Direct(OCP, scheme) => NLP # scheme is in general a Runge-Kutta scheme
+Direct(OCP, grid, scheme) => NLP # scheme is in general a Runge-Kutta scheme
 ```
 
 """
@@ -578,6 +578,9 @@ md"## Plots"
 # ╔═╡ c93b4007-b1b5-405d-bd64-f9ea1e0ed906
 @bind N NumberField(1:1000, default=3)
 
+# ╔═╡ d945e217-59e0-4a55-9381-fab63947f0fb
+md"# Appendix"
+
 # ╔═╡ 3a9a57e7-5319-48fa-be52-2dd48659541f
 reset_plot() = @htl("""
 <button class=button-3 style="margin-left:10px">Reset above errors plot</button>
@@ -585,9 +588,6 @@ reset_plot() = @htl("""
 
 # ╔═╡ 869eeeb3-9948-46b5-97f3-a64b9dbcba9a
 @bind reset_errors_plot_data reset_plot()
-
-# ╔═╡ d945e217-59e0-4a55-9381-fab63947f0fb
-md"# Appendix"
 
 # ╔═╡ 45a81a29-82eb-4280-a965-ae1afe89091f
 TableOfContents(depth=2)
