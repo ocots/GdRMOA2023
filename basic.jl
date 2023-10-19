@@ -493,7 +493,6 @@ function basic_jump(N)
 		con_c0, c[1] - c0 == 0
 		con_x0, x[1] - x0 == 0
 		con_xf, x[N+1] - xf == 0
-		con_uf, u[N+1] - u[N] == 0
 	end)
 
 	#
@@ -531,7 +530,12 @@ function Euler(N)
 	end);
 
 	nlp[:scheme] = :euler
-
+	
+	# 
+	JuMP.@constraints(nlp, begin
+		con_uf, u[N+1] - u[N] == 0
+	end)
+	
 	return nlp
 end;
 

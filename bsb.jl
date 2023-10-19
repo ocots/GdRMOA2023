@@ -182,7 +182,7 @@ end
 begin
 
 	tf  = 2 	# we must have tf ≥ 0.5 to make the target reachable
-	N   = 50
+	N   = 100
 	tol = 1e-8
 
 	ocp = OCP(tf)
@@ -361,16 +361,24 @@ function initial_guess(sol, η=1e-1)
 		t1 = (tj+λ*ti)/(1+λ)
 		return p0, t1
 	else
+		#
 		singular_times = t[ abs.(u.(t)) .≤ 1-η ]
-		t1 = min(singular_times... )
-		t2 = max(singular_times... )
-		return p0, t1, t2
+		t1_u = min(singular_times... )
+		t2_u = max(singular_times... )
+		#
+		I = (abs.(φ.(t))  .≤ η)
+		J = (abs.(dφ.(t)) .≤ η)
+		singular_times = t[ I .& J ]
+		t1_φ = min(singular_times... )
+		t2_φ = max(singular_times... )
+		#
+		return p0, (t1_u+t1_φ)/2, (t2_u+t2_φ)/2
 	end
 	
 end
 
 # ╔═╡ febf637a-2a2e-430d-9cb6-8bbdf1f93c31
-ξ_guess = initial_guess(direct_sol)
+ξ_guess = initial_guess(direct_sol, 1e-2)
 
 # ╔═╡ e54fbb62-1b8c-4862-9205-afe31d0d8203
 function guess_plot(sol, ξ)
@@ -520,9 +528,12 @@ end;
 # ╔═╡ aa29362f-9ed2-4c79-aef6-ca8d4c28dc99
 flow_sol = OptimalFlow(switching_times_solution...);
 
+# ╔═╡ acf70827-e14b-4ebe-81d5-9d1a002778a1
+saveat = sort([range(t0, tf, 200); switching_times_solution...]); # only for the plot
+
 # ╔═╡ af90fd52-c990-4dab-8697-a672e41851d3
 # ╠═╡ show_logs = false
-indirect_sol = flow_sol((t0, tf), x0, p0_solution);
+indirect_sol = flow_sol((t0, tf), x0, p0_solution, saveat=saveat);
 
 # ╔═╡ f5acfa12-4e9c-417e-bbbc-8f819ef195b9
 begin
@@ -3006,6 +3017,7 @@ version = "1.4.1+1"
 # ╟─b5ef6acc-6374-493f-ad02-407a3a84c5bb
 # ╠═a08cd686-cb73-4657-887f-d2c08fda6932
 # ╠═aa29362f-9ed2-4c79-aef6-ca8d4c28dc99
+# ╠═acf70827-e14b-4ebe-81d5-9d1a002778a1
 # ╠═af90fd52-c990-4dab-8697-a672e41851d3
 # ╟─f5acfa12-4e9c-417e-bbbc-8f819ef195b9
 # ╟─098f20a5-cc3e-476d-9ae5-560eab08d7d7
