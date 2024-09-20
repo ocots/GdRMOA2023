@@ -24,10 +24,9 @@ plus boundary, control and state constraints.
 
 We present:
 
-- [an introduction to direct and indirect methods on a basic smooth example](https://control-toolbox.org/GdRMOA2023/basic.html)
+- [an introduction to direct and indirect methods on a basic smooth example](https://ocots.github.io/GdRMOA2023/basic.html)
 - the `OptimalControl.jl` package on a [basic example](https://control-toolbox.org/docs/optimalcontrol/stable/tutorial-basic-example.html)
-- [a bang-singular-bang example](https://control-toolbox.org/GdRMOA2023/bsb.html)
+- [a bang-singular-bang example](https://ocots.github.io/GdRMOA2023/bsb.html)
 - a more [advanced example: the Goddard problem](https://control-toolbox.org/docs/optimalcontrol/stable/tutorial-goddard.html), which combines direct and indirect methods.
-- Other examples: [HMP](https://github.com/control-toolbox/HMP), [control loss](https://github.com/control-toolbox/control-loss)
 
-For fun: [ct playground](https://control-toolbox.org/GdRMOA2023/ct-playground.html)!
+For fun: [ct playground](https://ocots.github.io/GdRMOA2023/ct-playground.html)!
